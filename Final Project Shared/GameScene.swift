@@ -100,7 +100,7 @@ extension GameScene {
    
 }
 #endif
-
+		
 #if os(OSX)
 // Mouse-based event handling
 extension GameScene {
