@@ -10,28 +10,7 @@
 		02EB4BE72EC53688000B6D16 /* Final Project.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Final Project.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		02EB4BF82EC53688000B6D16 /* Exceptions for "Final Project Shared" folder in "Final Project iOS" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Actions.sks,
-				Assets.xcassets,
-				GameScene.sks,
-				GameScene.swift,
-			);
-			target = 02EB4BE62EC53688000B6D16 /* Final Project iOS */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		02EB4BDE2EC53684000B6D16 /* Final Project Shared */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				02EB4BF82EC53688000B6D16 /* Exceptions for "Final Project Shared" folder in "Final Project iOS" target */,
-			);
-			path = "Final Project Shared";
-			sourceTree = "<group>";
-		};
 		02EB4BE92EC53688000B6D16 /* Final Project iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "Final Project iOS";
@@ -53,7 +32,6 @@
 		02EB4BD92EC53683000B6D16 = {
 			isa = PBXGroup;
 			children = (
-				02EB4BDE2EC53684000B6D16 /* Final Project Shared */,
 				02EB4BE92EC53688000B6D16 /* Final Project iOS */,
 				02EB4BE82EC53688000B6D16 /* Products */,
 			);
