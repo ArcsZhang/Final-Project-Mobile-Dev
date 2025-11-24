@@ -19,9 +19,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     var lastShotTime : CGFloat = 0
     var isPausedForShot = false
     
+    let maxHearts = 3
+    var currentHearts = 3
+    var heartNodes: [SKSpriteNode] = []
+    
     private var lastUpdateTime : TimeInterval = 0
     
     var pressHold = false
+    
+    var score = 0
+    var scoreLabel: SKLabelNode!
     
     struct PhysicsCategory {
         static let none: UInt32   = 0
@@ -110,6 +117,53 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         spawnEnemy(wave: "t")
         sceneWidth = size.width
         sceneHeight = size.height
+    }
+    
+    private func setupHearts() {
+        
+        let bottomPadding: CGFloat = 30    // distance from bottom of screen
+            let spacing: CGFloat = 60          // space between hearts
+
+            // total width occupied by all hearts (distance between first and last)
+            let totalWidth = CGFloat(maxHearts - 1) * spacing
+
+            // x of the FIRST heart so that the whole row is centered
+            let startX = size.width / 2 - totalWidth / 2
+            let y = bottomPadding
+        
+        for i in 0..<maxHearts {
+            let heart = SKSpriteNode(imageNamed: "heart_full")
+            heart.setScale(0.05)
+            let x = startX + CGFloat(i) * spacing
+                    heart.position = CGPoint(x: x, y: y)
+            heart.zPosition = 100
+            addChild(heart)
+            heartNodes.append(heart)
+        }
+    }
+    
+    private func updateHearts() {
+        for (index, heart) in heartNodes.enumerated() {
+            if index < currentHearts {
+                heart.texture = SKTexture(imageNamed: "heart_full")
+            } else {
+                heart.texture = SKTexture(imageNamed: "heart_empty")
+            }
+        }
+    }
+    
+    func damagePlayer(by amount: Int = 1) {
+        guard currentHearts > 0 else { return }
+        currentHearts -= amount
+        if currentHearts < 0 {
+            currentHearts = 0
+        }
+        
+        updateHearts()
+        
+        if currentHearts == 0 {
+            // Trigger game over
+        }
     }
     
     override func update(_ currentTime: TimeInterval) {
@@ -221,9 +275,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func handleHit(bullet: SKNode, enemy: SKNode) {
-        if let enemy = enemy as? Enemy, let bullet = bullet as? Bullet {
-            enemy.applyDamage(bullet.damage)
+        if let enemy = enemy as? Enemy, let bullet = bullet as?
+            Bullet {
+                enemy.applyDamage(bullet.damage)
+            
+            if enemy.health <= 0 {
+                enemyDestroyed(enemy)
+            }
         }
         bullet.removeFromParent()
+    }
+    
+    func enemyDestroyed(_ enemy: Enemy) {
+        score += 100
+        scoreLabel.text = "Score: \(score)"
+    }
+    
+    func setupScoreLabel () -> SKLabelNode {
+        let label = SKLabelNode(fontNamed: "PressStart2P")
+        label.fontSize = 24
+        label.zPosition = 100;
+        
+        label.position = CGPoint(
+            x: size.width / 2,
+            y: size.height - 60
+        )
+        label.text = "Score: \(score)"
+        addChild(label)
+        return label
     }
 }
