@@ -7,7 +7,9 @@
 
 import SpriteKit
 
-class GameScene: SKScene, SKPhysicsContactDelegate		 {
+class GameScene: SKScene, SKPhysicsContactDelegate {
+    public var sceneWidth: CGFloat = 0
+    public var sceneHeight: CGFloat = 0
     // Player
     var player : SKSpriteNode!
     var playerSpeed : CGFloat = 100.0
@@ -26,6 +28,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate		 {
         static let player: UInt32 = 0x1 << 0
         static let bullet: UInt32 = 0x1 << 1
         static let enemy: UInt32  = 0x1 << 2
+        static let enemyBullet : UInt32 = 0x1 << 3
+    }
+    
+    func normalize(_ p: CGPoint) -> CGPoint {
+        let length = sqrt(p.x * p.x + p.y * p.y)
+        if length == 0 { return CGPoint(x: 0, y: 1) }
+        return CGPoint(x: p.x / length, y: p.y / length)
     }
     
     private func setupPlayer() {
@@ -78,6 +87,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate		 {
             enemy.position = CGPoint(x: x, y: y)
             enemy.name = "enemy"
             enemy.zPosition = 5
+            enemy.movePattern = .chase
+            enemy.hSpeed = 70
+            enemy.vSpeed = 0
+            enemy.bulletType = .normal
+            enemy.shootPattern = .blind
             enemy.physicsBody = SKPhysicsBody(rectangleOf: size)
             enemy.physicsBody?.isDynamic = false
             enemy.physicsBody?.categoryBitMask = PhysicsCategory.enemy
@@ -93,7 +107,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate		 {
         physicsWorld.gravity = .zero
         physicsWorld.contactDelegate = self
         setupPlayer()
-        spawnEnemy(wave: "3t")
+        spawnEnemy(wave: "t")
+        sceneWidth = size.width
+        sceneHeight = size.height
     }
     
     override func update(_ currentTime: TimeInterval) {
@@ -104,6 +120,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate		 {
             dt = currentTime - lastUpdateTime
         }
         lastUpdateTime = currentTime
+        
+        for node in children {
+            if let enemy = node as? Enemy {
+                enemy.updateAI(deltaTime: dt, scene: self)
+            }
+            if let bullet = node as? Bullet {
+                bullet.updateBullet(deltaTime: dt, scene: self)
+            }
+        }
         
         // Shoot pause
         if isPausedForShot {
@@ -154,10 +179,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate		 {
         lastShotTime = CACurrentMediaTime()
         
         // create bullet
-        let bullet = Bullet(color: .yellow, size: CGSize(width: 6, height: 20))
+        let bullet = Bullet(color: .yellow, size: CGSize(width: 25, height: 15))
+        bullet.owner = .player
         bullet.damage = 2
         bullet.position = CGPoint(x: player.position.x, y: player.position.y + player.size.height)
         bullet.zPosition = 8
+        
+        bullet.direction = normalize(CGPoint(x: 1, y: 1))
+        bullet.zRotation = atan2(bullet.direction.y, bullet.direction.x)
+        bullet.bulletSpeed = 100
+        bullet.acceleration = 200
+        bullet.bounceCount = 2
+        bullet.bounceCelling = true
+        bullet.bounceFloor = true
         
         // physics body for collision
         bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
@@ -168,11 +202,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate		 {
         bullet.physicsBody?.isDynamic = true
         
         addChild(bullet)
-        
-        // bullet movement
-        let moveUp = SKAction.moveBy(x: 0, y: size.height, duration: 1.0)
-        let remove = SKAction.removeFromParent()
-        bullet.run(.sequence([moveUp, remove]))
     }
     
     func didBegin(_ contact: SKPhysicsContact) {
