@@ -60,9 +60,6 @@ class Enemy: SKSpriteNode {
     
     func applyDamage(_ amount: Int) {
         health -= amount
-        if health <= 0 {
-            removeFromParent()
-        }
     }
     
     func updateAI (deltaTime: TimeInterval, scene: GameScene) {

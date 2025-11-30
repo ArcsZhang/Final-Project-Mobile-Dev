@@ -117,6 +117,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         spawnEnemy(wave: "t")
         sceneWidth = size.width
         sceneHeight = size.height
+        setupHearts()
+        scoreLabel = setupScoreLabel()
     }
     
     private func setupHearts() {
@@ -289,6 +291,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     func enemyDestroyed(_ enemy: Enemy) {
         score += 100
         scoreLabel.text = "Score: \(score)"
+        enemy.removeFromParent()
     }
     
     func setupScoreLabel () -> SKLabelNode {
@@ -304,4 +307,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(label)
         return label
     }
+    
+    //test git push
 }
