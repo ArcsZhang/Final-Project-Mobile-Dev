@@ -162,6 +162,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         backgroundColor = .black
         physicsWorld.gravity = .zero
         physicsWorld.contactDelegate = self
+        
+        let bgm = SKAudioNode(fileNamed: "song.mp3")
+                bgm.autoplayLooped = true // looping forever
+                bgm.name = "backgroundMusic" //easier to stop it when gameover
+                addChild(bgm)
+                print("sound: song.mp3")
+        
         setupPlayer()
         spawnEnemy(wave: "t")
         sceneWidth = size.width
@@ -230,19 +237,28 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         player.run(SKAction.sequence([fadeOut, fadeIn, fadeOut, fadeIn]))
         
         if currentHearts == 0 {
+            //sound
+            run(SKAction.playSoundFileNamed("death.mp3", waitForCompletion: false))
+            print("sound: death.mp3")
+            
             // Game Over Logic
             triggerGameOver()
         }
     }
     
     func triggerGameOver() {
-        // 1. game over
+        // game over
         isGameOver = true
         
-        // 2. remove ship	
+        // remove ship
         player.removeFromParent()
         
-        // 3. show GAME OVER
+        // stop bgm when gameover
+        if let bgm = childNode(withName: "backgroundMusic") {
+            bgm.removeFromParent()
+        }
+        
+        // show GAME OVER
         let goLabel = SKLabelNode(fontNamed: "PressStart2P")
         goLabel.text = "GAME OVER"
         goLabel.fontSize = 40
@@ -251,7 +267,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         goLabel.zPosition = 1000
         addChild(goLabel)
         
-        // 4. show final score
+        // show final score
         let finalScoreLabel = SKLabelNode(fontNamed: "PressStart2P")
         finalScoreLabel.text = "Final Score: \(score)"
         finalScoreLabel.fontSize = 24
@@ -259,7 +275,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         finalScoreLabel.position = CGPoint(x: size.width/2, y: size.height/2 - 40)
         finalScoreLabel.zPosition = 1000
         addChild(finalScoreLabel)
-        // 5. restart button
+        // restart button
         let restartBtn = SKLabelNode(fontNamed: "PressStart2P")
         restartBtn.text = "RESTART"
         restartBtn.fontSize = 30
@@ -528,6 +544,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     func collectPowerUp(playerNode: SKNode, powerUpNode: SKNode) {
         powerUpNode.removeFromParent()
+        
+        run(SKAction.playSoundFileNamed("powerup.mp3", waitForCompletion: false))
+        print("sound：powerup.mp3")
         
         // upgrade weapon
         if playerWeaponLevel < 3 {
