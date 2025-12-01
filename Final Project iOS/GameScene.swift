@@ -30,13 +30,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     var score = 0
     var scoreLabel: SKLabelNode!
     
+    var level = 0 // current level
+    var playerWeaponLevel = 1 // 玩家武器等级：1=单发，2=双发，3=强力
+    
+    var isSpawning = false
+    var pendingEnemies = 0
+    
     struct PhysicsCategory {
-        static let none: UInt32   = 0
-        static let player: UInt32 = 0x1 << 0
-        static let bullet: UInt32 = 0x1 << 1
-        static let enemy: UInt32  = 0x1 << 2
-        static let enemyBullet : UInt32 = 0x1 << 3
-    }
+            static let none: UInt32   = 0
+            static let player: UInt32 = 0x1 << 0
+            static let bullet: UInt32 = 0x1 << 1
+            static let enemy: UInt32  = 0x1 << 2
+            static let enemyBullet : UInt32 = 0x1 << 3
+            static let powerUp: UInt32 = 0x1 << 4
+        }
+        
+        
+        
     
     func normalize(_ p: CGPoint) -> CGPoint {
         let length = sqrt(p.x * p.x + p.y * p.y)
@@ -51,63 +61,96 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(player)
         // static physics body so it can be referenced but not moved by physics engine
         player.physicsBody = SKPhysicsBody(rectangleOf: player.size)
-        player.physicsBody?.isDynamic = false
+        player.physicsBody?.isDynamic = true // Must be true for contacts / 必须为true才能触发碰撞
+        player.physicsBody?.affectedByGravity = false
+        
+        // Identity
+        player.physicsBody?.categoryBitMask = PhysicsCategory.player
+        
+        // Listen for contact with: Enemy Bullets AND PowerUps
+        // 关键：告诉玩家要监听“敌方子弹”和“道具”的碰撞
+        player.physicsBody?.contactTestBitMask = PhysicsCategory.enemyBullet | PhysicsCategory.powerUp
+        
+        // No physical bounce
+        player.physicsBody?.collisionBitMask = PhysicsCategory.none
     }
     
     private func spawnEnemy(wave: String) {
-        
-        // Parse modifiers
-        var size = CGSize(width: 32, height: 32)
-        var count = 1
-        var health = 2
-        
-        for char in wave {
-            switch char {
-                
-            case "t":
-                size = CGSize(width: 64, height: 32)
-                health = 3
-                
-            case "2":
-                count = 2
-                
-            case "3":
-                count = 3
-                
-            default:
-                continue
-            }
-        }
-        
-        // Compute layout
-        let spacing: CGFloat = 10
-        let totalWidth = CGFloat(count) * size.width + CGFloat(count - 1) * spacing
-        let startX = (self.size.width - totalWidth) * 0.5 + size.width * 0.5
-        let y = self.size.height - 100
-        
-        // Spawn enemie
-        for i in 0..<count {
-            let x = startX + CGFloat(i) * (size.width + spacing)
+            let count = wave.count
+            if count == 0 { return }
             
-            let enemy = Enemy(color: .red, size: size)
-            enemy.health = health
-            enemy.position = CGPoint(x: x, y: y)
-            enemy.name = "enemy"
-            enemy.zPosition = 5
-            enemy.movePattern = .chase
-            enemy.hSpeed = 70
-            enemy.vSpeed = 0
-            enemy.bulletType = .normal
-            enemy.shootPattern = .blind
-            enemy.physicsBody = SKPhysicsBody(rectangleOf: size)
-            enemy.physicsBody?.isDynamic = false
-            enemy.physicsBody?.categoryBitMask = PhysicsCategory.enemy
-            enemy.physicsBody?.contactTestBitMask = PhysicsCategory.bullet
-            enemy.physicsBody?.collisionBitMask = PhysicsCategory.none
-            // physics bodies may be added later
-            addChild(enemy)
+            // Lock the wave check until all enemies spawned
+            pendingEnemies = count
+            
+            var actions: [SKAction] = []
+            
+            for char in wave {
+                // 1. Wait Action (Random 1 to 2 seconds)
+                let waitDuration = Double.random(in: 1.0...2.0)
+                let wait = SKAction.wait(forDuration: waitDuration)
+                
+                // 2. Spawn Action
+                let spawn = SKAction.run { [weak self] in
+                    guard let self = self else { return }
+                    
+                    // Random X position at the top
+                    let randomX = CGFloat.random(in: 30...(self.size.width - 30))
+                    let spawnY = self.size.height + 50 // Start slightly off screen
+                    
+                    // default normal (red)
+                    var color: UIColor = .red
+                    var type: Enemy.EnemyBulletType = .normal
+                    var health = 2
+                    
+                    //Type t Scatter (purple)
+                    if char == "t" {
+                        color = .purple
+                        type = .scatter
+                        health = 5
+                    }
+                    
+                    //Type b Bounce (orange)
+                    else if char == "b" {
+                        color = .orange
+                        type = .bounce
+                        health = 3
+                    }
+                    
+                    let enemy = Enemy(color: color, size: CGSize(width: 32, height: 32))
+                    enemy.health = health
+                    enemy.position = CGPoint(x: randomX, y: spawnY)
+                    enemy.bulletType = type
+                    enemy.name = "enemy"
+                    enemy.zPosition = 5
+                    
+                    // Important: Enable AI shooting
+                    enemy.shootPattern = .blind
+                    
+                    // Movement: Slow float down
+                    enemy.movePattern = .dive
+                    enemy.hSpeed = 0
+                    enemy.vSpeed = 30
+                    
+                    // Physics
+                    enemy.physicsBody = SKPhysicsBody(rectangleOf: enemy.size)
+                    enemy.physicsBody?.isDynamic = true
+                    enemy.physicsBody?.categoryBitMask = PhysicsCategory.enemy
+                    enemy.physicsBody?.contactTestBitMask = PhysicsCategory.bullet
+                    enemy.physicsBody?.collisionBitMask = PhysicsCategory.none
+                    enemy.physicsBody?.affectedByGravity = false
+                    
+                    self.addChild(enemy)
+                    
+                    // One enemy spawned, decrease pending count
+                    self.pendingEnemies -= 1
+                }
+                
+                actions.append(wait)
+                actions.append(spawn)
+            }
+            
+            run(SKAction.sequence(actions))
         }
-    }
     
     override func didMove(to view: SKView) {
         backgroundColor = .black
@@ -186,6 +229,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
         
+        checkWaveStatus()
+        
         // Shoot pause
         if isPausedForShot {
             if currentTime - lastShotTime >= pauseDuration {
@@ -212,6 +257,57 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             player.position.x = size.width - halfW
             movementDirection = -1.0
         }
+        
+        
+    }
+    
+    
+    func checkWaveStatus() {
+            if isSpawning { return } // If already preparing next wave, wait
+            
+            let enemies = children.filter { $0 is Enemy }
+            if enemies.isEmpty && pendingEnemies == 0 {
+                isSpawning = true
+                
+                // Wait 1.5 seconds before starting next wave
+                let wait = SKAction.wait(forDuration: 1.5)
+                let spawn = SKAction.run { [weak self] in
+                    self?.startNextWave()
+                    self?.isSpawning = false
+                }
+                run(SKAction.sequence([wait, spawn]))
+            }
+        }
+    
+    func startNextWave() {
+        level += 1
+        
+        let enemyCount = min(level + 1, 6) // 最多4个，防止太挤
+        var waveString = ""
+        
+        if level % 5 == 0 {
+            waveString = "tbt"
+        } else {
+            // 普通波次：三种怪物概率完全相等 (1/3)
+            for _ in 0..<enemyCount {
+                // 生成一个 0 到 2 的随机整数
+                let roll = Int.random(in: 0...2)
+                
+                switch roll {
+                case 0:
+                    waveString += "1" // 普通怪 (红色)
+                case 1:
+                    waveString += "t" // 散弹怪 (紫色)
+                case 2:
+                    waveString += "b" // 弹射怪 (橙色)
+                default:
+                    waveString += "1"
+                }
+            }
+        }
+        
+        spawnEnemy(wave: waveString)
+        print("Starting Level \(level)")
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -228,53 +324,134 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     func shoot() {
-        guard !isPausedForShot else { return }
-        
-        // pause movement
-        isPausedForShot = true
-        lastShotTime = CACurrentMediaTime()
-        
-        // create bullet
-        let bullet = Bullet(color: .yellow, size: CGSize(width: 25, height: 15))
-        bullet.owner = .player
-        bullet.damage = 2
-        bullet.position = CGPoint(x: player.position.x, y: player.position.y + player.size.height)
-        bullet.zPosition = 8
-        
-        bullet.direction = normalize(CGPoint(x: 1, y: 1))
-        bullet.zRotation = atan2(bullet.direction.y, bullet.direction.x)
-        bullet.bulletSpeed = 100
-        bullet.acceleration = 200
-        bullet.bounceCount = 2
-        bullet.bounceCelling = true
-        bullet.bounceFloor = true
-        
-        // physics body for collision
-        bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
-        bullet.physicsBody?.categoryBitMask = PhysicsCategory.bullet
-        bullet.physicsBody?.contactTestBitMask = PhysicsCategory.enemy
-        bullet.physicsBody?.collisionBitMask = PhysicsCategory.none
-        bullet.physicsBody?.affectedByGravity = false
-        bullet.physicsBody?.isDynamic = true
-        
-        addChild(bullet)
-    }
+            
+            guard !isPausedForShot else { return }
+            isPausedForShot = true
+            lastShotTime = CACurrentMediaTime()
+            func fireBullet(offsetX: CGFloat, angle: CGFloat) {
+                
+                let bullet = Bullet(color: .yellow, size: CGSize(width: 25, height: 15))
+                bullet.owner = .player
+                bullet.damage = 2
+                bullet.zPosition = 8
+                bullet.position = CGPoint(
+                    x: player.position.x + offsetX,
+                    y: player.position.y + player.size.height
+                )
+
+                let dirX = -sin(angle)
+                let dirY = cos(angle)
+
+                bullet.direction = normalize(CGPoint(x: dirX, y: dirY))
+
+                bullet.zRotation = atan2(bullet.direction.y, bullet.direction.x)
+
+                bullet.bulletSpeed = 300
+                bullet.acceleration = 0
+
+                // Only bounce at high levels
+                            if playerWeaponLevel >= 4 {
+                                bullet.bounceCount = 2
+                            } else {
+                                bullet.bounceCount = 0
+                            }
+                bullet.bounceCelling = false
+                bullet.bounceFloor = false
+                
+                bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
+                bullet.physicsBody?.categoryBitMask = PhysicsCategory.bullet
+                bullet.physicsBody?.contactTestBitMask = PhysicsCategory.enemy
+                bullet.physicsBody?.collisionBitMask = PhysicsCategory.none
+                bullet.physicsBody?.affectedByGravity = false
+                bullet.physicsBody?.isDynamic = true
+                
+                // Add to scene
+                addChild(bullet)
+            }
+
+            switch playerWeaponLevel {
+            case 1:
+                // Level 1: Single shot straight up
+                // 单发，垂直向上
+                fireBullet(offsetX: 0, angle: 0)
+                
+            case 2:
+                // Level 2: Double shot, slightly offset left and right
+                // 双发，向左和向右轻微偏移
+                fireBullet(offsetX: -10, angle: 0)
+                fireBullet(offsetX: 10, angle: 0)
+                
+            case 3:
+                // Level 3: Shotgun/Spread (Center + Left Angle + Right Angle)
+                // 散弹（中间直射 + 左斜射 + 右斜射）
+                fireBullet(offsetX: 0, angle: 0)       // Center / 中
+                fireBullet(offsetX: -15, angle: 0.3)   // Left / 左 (~17 degrees)
+                fireBullet(offsetX: 15, angle: -0.3)   // Right / 右 (~17 degrees)
+                
+            default:
+                // Max Level / Fallback: 5-way spread
+                // 最高等级：5向散弹
+                fireBullet(offsetX: 0, angle: 0)
+                fireBullet(offsetX: -15, angle: 0.2)
+                fireBullet(offsetX: 15, angle: -0.2)
+                fireBullet(offsetX: -30, angle: 0.4)
+                fireBullet(offsetX: 30, angle: -0.4)
+            }
+        }
     
     func didBegin(_ contact: SKPhysicsContact) {
-        let first = contact.bodyA
-        let second = contact.bodyB
-
-        // sort so first is always bullet if present
-        let bodyA = first.categoryBitMask
-        let bodyB = second.categoryBitMask
-
-        if bodyA == PhysicsCategory.bullet && bodyB == PhysicsCategory.enemy {
-            handleHit(bullet: first.node!, enemy: second.node!)
+        // Safe check to fix fatal error
+        guard let nodeA = contact.bodyA.node,
+              let nodeB = contact.bodyB.node else {
+            return
         }
-        else if bodyA == PhysicsCategory.enemy && bodyB == PhysicsCategory.bullet {
-            handleHit(bullet: second.node!, enemy: first.node!)
+        
+        let maskA = contact.bodyA.categoryBitMask
+        let maskB = contact.bodyB.categoryBitMask
+        
+        // 1. Player Bullet hits Enemy
+        
+        if maskA == PhysicsCategory.bullet && maskB == PhysicsCategory.enemy {
+            handleHit(bullet: nodeA, enemy: nodeB)
+        }
+        else if maskB == PhysicsCategory.bullet && maskA == PhysicsCategory.enemy {
+            handleHit(bullet: nodeB, enemy: nodeA)
+        }
+        
+        // 2. Player hits PowerUp (Fix for blue box passing through)
+        
+        else if maskA == PhysicsCategory.player && maskB == PhysicsCategory.powerUp {
+            collectPowerUp(playerNode: nodeA, powerUpNode: nodeB)
+        }
+        else if maskB == PhysicsCategory.player && maskA == PhysicsCategory.powerUp {
+            collectPowerUp(playerNode: nodeB, powerUpNode: nodeA)
+        }
+        
+        // 3. Enemy Bullet hits Player (Fix for no damage)
+        
+        else if maskA == PhysicsCategory.player && maskB == PhysicsCategory.enemyBullet {
+            damagePlayer(by: 1)
+            nodeB.removeFromParent() // Remove bullet / 移除子弹
+        }
+        else if maskB == PhysicsCategory.player && maskA == PhysicsCategory.enemyBullet {
+            damagePlayer(by: 1)
+            nodeA.removeFromParent() // Remove bullet / 移除子弹
         }
     }
+    
+    func collectPowerUp(playerNode: SKNode, powerUpNode: SKNode) {
+            powerUpNode.removeFromParent()
+            
+            // upgrade weapon
+            if playerWeaponLevel < 3 {
+                playerWeaponLevel += 1
+                print("Weapon Upgraded to level \(playerWeaponLevel)!")
+                // can add effects or sound here
+            }
+            
+            // if +HP item
+            // damagePlayer(by: -1)
+        }
     
     private func handleHit(bullet: SKNode, enemy: SKNode) {
         if let enemy = enemy as? Enemy, let bullet = bullet as?
@@ -289,10 +466,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     func enemyDestroyed(_ enemy: Enemy) {
-        score += 100
-        scoreLabel.text = "Score: \(score)"
-        enemy.removeFromParent()
-    }
+            score += 100
+            scoreLabel.text = "Score: \(score)"
+            
+            // twenty percent drop a weapon powerup
+            if Int.random(in: 0...100) < 20 {
+                let powerUp = PowerUp(type: .weaponUpgrade, position: enemy.position)
+                addChild(powerUp)
+            }
+            
+            enemy.removeFromParent()
+        }
     
     func setupScoreLabel () -> SKLabelNode {
         let label = SKLabelNode(fontNamed: "PressStart2P")
