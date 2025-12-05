@@ -179,7 +179,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         var actions: [SKAction] = []
         
         for char in wave {
-            // Faster Spawn Interval
             let waitDuration = Double.random(in: 0.5...1.0)
             let wait = SKAction.wait(forDuration: waitDuration)
             
@@ -187,28 +186,34 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 guard let self = self else { return }
                 
                 let randomX = CGFloat.random(in: 30...(self.size.width - 30))
-                let spawnY = self.size.height + 10 // Close spawn
+                let spawnY = self.size.height + 10
                 
-                var color: UIColor = .red
+                var imageName = "Nautolan Ship - Fighter - Base"
                 var type: Enemy.EnemyBulletType = .normal
                 
-                // HP Scaling
                 var health = 200 + (self.level * 10)
-                // Step HP Increase every 7 levels
                 health += (self.level / 7) * 100
                 
                 if char == "t" {
-                    color = .purple
+                    imageName = "Nautolan Ship - Frigate - Base"
                     type = .scatter
                     health *= 2
                 } else if char == "b" {
-                    color = .orange
+                    imageName = "Nautolan Ship - Scout - Base"
                     type = .bounce
                     health = Int(Double(health) * 1.5)
                 }
                 
-                let enemy = Enemy(color: color, size: CGSize(width: 32, height: 32))
+                let texture = SKTexture(imageNamed: imageName)
+                texture.filteringMode = .nearest
+                let visualSize = CGSize(width: 64, height: 64)
+                let enemy = Enemy(texture: texture, color: .clear, size: visualSize)
+                
                 enemy.health = health
+                
+                // ✅ Add this line: Initialize Health Bar!
+                enemy.setupHealthBar()
+                
                 enemy.position = CGPoint(x: randomX, y: spawnY)
                 enemy.bulletType = type
                 enemy.name = "enemy"
@@ -216,7 +221,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 
                 enemy.shootPattern = .blind
                 
-                // Movement Randomization
                 let moveRoll = Int.random(in: 0...100)
                 if moveRoll < 40 {
                     enemy.movePattern = .dive
@@ -232,7 +236,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     enemy.hSpeed = CGFloat.random(in: 20...40)
                 }
                 
-                enemy.physicsBody = SKPhysicsBody(rectangleOf: enemy.size)
+                let physicsSize = CGSize(width: 36, height: 36)
+                enemy.physicsBody = SKPhysicsBody(rectangleOf: physicsSize)
                 enemy.physicsBody?.isDynamic = true
                 enemy.physicsBody?.categoryBitMask = PhysicsCategory.enemy
                 enemy.physicsBody?.contactTestBitMask = PhysicsCategory.bullet

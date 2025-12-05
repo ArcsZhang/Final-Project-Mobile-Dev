@@ -18,7 +18,7 @@ class Bullet: SKSpriteNode {
     var maxSpeed: CGFloat = 600
     var minSpeed: CGFloat = 0
     var acceleration: CGFloat = 0
-
+    
     var owner: Owner = .none
     
     var bounceCount: Int = 0

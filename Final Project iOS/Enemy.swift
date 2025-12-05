@@ -24,8 +24,11 @@ class Enemy: SKSpriteNode {
         case none, normal, scatter, laser, bounce, gravity
     }
     
-    // Health is now set dynamically in spawnEnemy to scale with levels
+    // --- Stats ---
     var health: Int = 200
+    var maxHealth: Int = 200 // Added: To calculate percentage
+    
+    // --- State ---
     var entry: EnemyEntry = .none
     var entered: Bool = false
     var movePattern: EnemyMovementPattern = .none
@@ -43,8 +46,42 @@ class Enemy: SKSpriteNode {
     var acceleration: CGFloat = 0.0
     var hDirection: CGFloat = 1.0 // 1 right -1 left
     
+    // --- Visuals ---
+    var healthBar: SKSpriteNode? // The red bar
+    
+    // --- Methods ---
+    
+    // Setup the health bar visual
+    func setupHealthBar() {
+        // Capture initial health as max
+        self.maxHealth = health
+        
+        // 1. Background Bar (Black)
+        let barSize = CGSize(width: 40, height: 5)
+        let bg = SKSpriteNode(color: .black, size: barSize)
+        // Position: Above the enemy
+        bg.position = CGPoint(x: 0, y: self.size.height / 2 + 10)
+        bg.zPosition = 50 // High Z to be visible
+        addChild(bg)
+        
+        // 2. Foreground Bar (Red)
+        healthBar = SKSpriteNode(color: .red, size: barSize)
+        // Anchor Point (0, 0.5) means it shrinks from right to left
+        healthBar?.anchorPoint = CGPoint(x: 0, y: 0.5)
+        healthBar?.position = CGPoint(x: -barSize.width / 2, y: self.size.height / 2 + 10)
+        healthBar?.zPosition = 51 // Above background
+        addChild(healthBar!)
+    }
+    
     func applyDamage(_ amount: Int) {
         health -= amount
+        if health < 0 { health = 0 }
+        
+        // Update bar width based on percentage
+        if let bar = healthBar, maxHealth > 0 {
+            let percentage = CGFloat(health) / CGFloat(maxHealth)
+            bar.xScale = percentage
+        }
     }
     
     func updateAI (deltaTime: TimeInterval, scene: GameScene) {
@@ -72,7 +109,6 @@ class Enemy: SKSpriteNode {
             position.y -= vSpeed * deltaTime
             vSpeed += acceleration * deltaTime
             
-            // bounce at edges
             if position.x <= halfW {
                 position.x = halfW
                 hDirection = 1.0
@@ -144,7 +180,6 @@ class Enemy: SKSpriteNode {
             b.bulletSpeed = speed
             b.zRotation = atan2(direction.y, direction.x)
             
-            // Physics Body
             b.physicsBody = SKPhysicsBody(rectangleOf: b.size)
             b.physicsBody?.categoryBitMask = GameScene.PhysicsCategory.enemyBullet
             b.physicsBody?.contactTestBitMask = GameScene.PhysicsCategory.player
@@ -152,7 +187,6 @@ class Enemy: SKSpriteNode {
             b.physicsBody?.affectedByGravity = false
             b.physicsBody?.isDynamic = true
             
-            // Bounce logic
             if isBounce {
                 b.bounceCount = 2
                 b.bounceFloor = false
