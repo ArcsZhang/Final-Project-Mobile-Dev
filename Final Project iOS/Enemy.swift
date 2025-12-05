@@ -9,38 +9,23 @@ import SpriteKit
 
 class Enemy: SKSpriteNode {
     enum EnemyEntry {
-        case top
-        case left
-        case right
-        case none
+        case top, left, right, none
     }
     
     enum EnemyMovementPattern {
-        case none
-        case zigzag
-        case dive
-        case retreat
-        case chase
+        case none, zigzag, dive, retreat, chase
     }
     
     enum EnemyShootPattern {
-        case none
-        case blind
-        case detectForward
-        case aimAtPlayer
-        case diagonal
+        case none, blind, detectForward, aimAtPlayer, diagonal
     }
     
     enum EnemyBulletType {
-        case none
-        case normal
-        case scatter
-        case laser
-        case bounce
-        case gravity
+        case none, normal, scatter, laser, bounce, gravity
     }
     
-    var health: Int = 2
+    // Health is now set dynamically in spawnEnemy to scale with levels
+    var health: Int = 200
     var entry: EnemyEntry = .none
     var entered: Bool = false
     var movePattern: EnemyMovementPattern = .none
@@ -72,12 +57,7 @@ class Enemy: SKSpriteNode {
     }
     
     func enter (deltaTime: TimeInterval, scene: GameScene) {
-        switch entry {
-        case .none:
-            entered = true
-        default:
-            entered = true
-        }
+        entered = true
     }
     
     func move (deltaTime: TimeInterval, scene: GameScene) {
@@ -104,11 +84,12 @@ class Enemy: SKSpriteNode {
             position.y -= vSpeed * deltaTime
             vSpeed += acceleration * deltaTime
         case .chase:
-            let player = scene.player!
-            if player.position.x > position.x {
-                position.x += min(hSpeed * deltaTime, player.position.x - position.x)
-            } else if player.position.x < position.x{
-                position.x -= min(hSpeed * deltaTime, position.x - player.position.x)
+            if let player = scene.player {
+                if player.position.x > position.x {
+                    position.x += min(hSpeed * deltaTime, player.position.x - position.x)
+                } else if player.position.x < position.x{
+                    position.x -= min(hSpeed * deltaTime, position.x - player.position.x)
+                }
             }
             position.y -= vSpeed * deltaTime
             vSpeed += acceleration * deltaTime
@@ -134,7 +115,6 @@ class Enemy: SKSpriteNode {
             return
         }
         
-        
         switch shootPattern {
         case .none:
             return
@@ -155,20 +135,18 @@ class Enemy: SKSpriteNode {
         charging = false
         
         func fireEnemyBullet(direction: CGPoint, speed: CGFloat, isBounce: Bool = false) {
-        // Create bullet
-        let b = Bullet(color: .red, size: CGSize(width: 15, height: 15))
-        b.owner = .enemy
-        b.position = self.position
-        b.zPosition = 8
-        
+            let b = Bullet(color: .red, size: CGSize(width: 15, height: 15))
+            b.owner = .enemy
+            b.position = self.position
+            b.zPosition = 8
+            
             b.direction = direction
             b.bulletSpeed = speed
             b.zRotation = atan2(direction.y, direction.x)
             
-            // Physics Body (CRITICAL: Without this, player won't take damage)
-            // 关键：必须设置物理体，否则无法碰撞检测
+            // Physics Body
             b.physicsBody = SKPhysicsBody(rectangleOf: b.size)
-            b.physicsBody?.categoryBitMask = GameScene.PhysicsCategory.enemyBullet // distinct category
+            b.physicsBody?.categoryBitMask = GameScene.PhysicsCategory.enemyBullet
             b.physicsBody?.contactTestBitMask = GameScene.PhysicsCategory.player
             b.physicsBody?.collisionBitMask = GameScene.PhysicsCategory.none
             b.physicsBody?.affectedByGravity = false
@@ -176,8 +154,8 @@ class Enemy: SKSpriteNode {
             
             // Bounce logic
             if isBounce {
-                b.bounceCount = 2 // bounce 2 times
-                b.bounceFloor = false // Don't bounce off bottom (game over line)
+                b.bounceCount = 2
+                b.bounceFloor = false
             } else {
                 b.bounceCount = 0
             }
@@ -185,24 +163,17 @@ class Enemy: SKSpriteNode {
             scene.addChild(b)
         }
         
-        // Logic based on Enemy Type
         switch bulletType {
         case .scatter:
-            // Shotgun: 3 bullets (Left, Center, Right)
-            // 散弹：左中右三发
-            fireEnemyBullet(direction: scene.normalize(CGPoint(x: 0, y: -1)), speed: 90)     // Center
-            fireEnemyBullet(direction: scene.normalize(CGPoint(x: -0.3, y: -1)), speed: 90)  // Left
-            fireEnemyBullet(direction: scene.normalize(CGPoint(x: 0.3, y: -1)), speed: 90)   // Right
+            fireEnemyBullet(direction: scene.normalize(CGPoint(x: 0, y: -1)), speed: 90)
+            fireEnemyBullet(direction: scene.normalize(CGPoint(x: -0.3, y: -1)), speed: 90)
+            fireEnemyBullet(direction: scene.normalize(CGPoint(x: 0.3, y: -1)), speed: 90)
             
         case .bounce:
-            // Bouncing bullet: Shoots diagonally
-            // 弹射：随机向左下或右下发射
             let dirX: CGFloat = Bool.random() ? 0.5 : -0.5
             fireEnemyBullet(direction: scene.normalize(CGPoint(x: dirX, y: -1)), speed: 110, isBounce: true)
             
-        default: // .normal or others
-            // Straight down
-            // 普通：垂直向下
+        default:
             fireEnemyBullet(direction: CGPoint(x: 0, y: -1), speed: 100)
         }
     }
@@ -219,7 +190,6 @@ class Enemy: SKSpriteNode {
         addChild(glow)
         chargeEffect = glow
         
-        // Animate glow pulsing
         let fadeIn = SKAction.fadeAlpha(to: 0.8, duration: 0.1)
         let fadeOut = SKAction.fadeAlpha(to: 0.2, duration: 0.1)
         let pulse = SKAction.repeatForever(SKAction.sequence([fadeIn, fadeOut]))

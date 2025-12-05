@@ -9,16 +9,11 @@ import SpriteKit
 
 class Bullet: SKSpriteNode {
     enum Owner {
-        case player
-        case enemy
-        case neutral
-        case none
+        case player, enemy, neutral, none
     }
     
     var damage: Int = 2
-    
-    var direction: CGPoint	 = .zero
-    var gravity: CGFloat = 0 // TODO
+    var direction: CGPoint = .zero
     var bulletSpeed: CGFloat = 0
     var maxSpeed: CGFloat = 600
     var minSpeed: CGFloat = 0
@@ -26,10 +21,29 @@ class Bullet: SKSpriteNode {
 
     var owner: Owner = .none
     
-    var bounceCount: Int = 0 // 0 = can't bounce, n = bounce number, -1 = infinite bounce
+    var bounceCount: Int = 0
     var bounceFloor = false
     var bounceCelling = false
-    var isLaser = false
+    
+    // NEW: Init with Texture (for animated bullets)
+    init(texture: SKTexture?, size: CGSize) {
+        super.init(texture: texture, color: .white, size: size)
+        setupDefaults()
+    }
+    
+    // KEEP: Old Init with Color (for enemy bullets or simple shapes)
+    init(color: UIColor, size: CGSize) {
+        super.init(texture: nil, color: color, size: size)
+        setupDefaults()
+    }
+    
+    private func setupDefaults() {
+        // Common setup if any
+    }
+    
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
     
     func updateBullet (deltaTime: TimeInterval, scene: GameScene) {
         position.x += direction.x * bulletSpeed * deltaTime
@@ -38,13 +52,8 @@ class Bullet: SKSpriteNode {
         if bulletSpeed != maxSpeed || bulletSpeed != minSpeed {
             bulletSpeed += acceleration * deltaTime
         }
-        if bulletSpeed > maxSpeed {
-            bulletSpeed = maxSpeed
-        }
-        if bulletSpeed < minSpeed {
-            bulletSpeed = minSpeed
-        }
         
+        // Bounce Logic
         if bounceCount != 0 {
             if position.x < 0 {
                 position.x = -position.x
@@ -62,12 +71,8 @@ class Bullet: SKSpriteNode {
                     direction.y *= -1
                     zRotation = atan2(direction.y, direction.x)
                     bounceCount -= 1
-                    if bounceCount == 0 {
-                        removeFromParent()
-                    }
-                } else {
-                    removeFromParent()
-                }
+                    if bounceCount == 0 { removeFromParent() }
+                } else { removeFromParent() }
             }
             if position.y > scene.size.height {
                 if bounceCelling {
@@ -75,14 +80,11 @@ class Bullet: SKSpriteNode {
                     direction.y *= -1
                     zRotation = atan2(direction.y, direction.x)
                     bounceCount -= 1
-                    if bounceCount == 0 {
-                        removeFromParent()
-                    }
-                } else {
-                    removeFromParent()
-                }
+                    if bounceCount == 0 { removeFromParent() }
+                } else { removeFromParent() }
             }
         } else {
+            // Remove if off screen
             if position.y > scene.size.height || position.y < 0 || position.x > scene.size.width || position.x < 0 {
                 removeFromParent()
             }

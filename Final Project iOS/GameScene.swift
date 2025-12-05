@@ -10,12 +10,25 @@ import SpriteKit
 class GameScene: SKScene, SKPhysicsContactDelegate {
     public var sceneWidth: CGFloat = 0
     public var sceneHeight: CGFloat = 0
+    
     // Player
     var player : SKSpriteNode!
-    var playerSpeed : CGFloat = 100.0
-    var movementDirection : CGFloat = 1.0 // 1 right, -1 left
+    var movementDirection : CGFloat = 1.0
     
-    var pauseDuration : CGFloat = 0.5
+    // --- Player Stats ---
+    var playerDamage: Int = 80
+    var playerMoveSpeed: CGFloat = 150
+    var baseFireRate: Double = 0.6
+    var playerFireRate: Double = 0.6
+    
+    // --- Weapon Abilities ---
+    var hasDoubleShot = false
+    var hasScatterShot = false
+    var hasRicochet = false
+    var hasPlasmaField = false
+    var hasLuckBoost = false
+    
+    // --- Game Logic ---
     var lastShotTime : CGFloat = 0
     var isPausedForShot = false
     
@@ -24,19 +37,40 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     var heartNodes: [SKSpriteNode] = []
     
     private var lastUpdateTime : TimeInterval = 0
-    
     var pressHold = false
     
     var score = 0
     var scoreLabel: SKLabelNode!
     
-    var level = 0 // current level
-    var playerWeaponLevel = 1 // 玩家武器等级：1=单发，2=双发，3=强力
+    var level = 0
+    let evolutionInterval = 6 // Evolve every 6 levels
     
     var isSpawning = false
     var pendingEnemies = 0
     
+    // --- HUD ---
+    var waveCountdownLabel: SKLabelNode!
+    var totalWaveLabel: SKLabelNode!
+    
+    // --- States ---
     var isGameOver = false
+    var isInvincible = false
+    var isBerserk = false
+    
+    // --- Visuals ---
+    var hasShield = false
+    let shieldNodeName = "shieldVisual"
+    let berserkNodeName = "berserkVisual"
+    
+    // --- Upgrade System ---
+    var isPausedForUpgrade = false
+    var currentUpgradeOptions: [UpgradeOption] = []
+    
+    struct UpgradeOption {
+        var title: String
+        var description: String
+        var action: () -> Void
+    }
     
     struct PhysicsCategory {
         static let none: UInt32   = 0
@@ -46,9 +80,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         static let enemyBullet : UInt32 = 0x1 << 3
         static let powerUp: UInt32 = 0x1 << 4
     }
-    
-    
-    
     
     func normalize(_ p: CGPoint) -> CGPoint {
         let length = sqrt(p.x * p.x + p.y * p.y)
@@ -65,61 +96,115 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         player.position = CGPoint(x: size.width * 0.5, y: 100)
         player.zPosition = 10
         addChild(player)
-        // static physics body so it can be referenced but not moved by physics engine
-        player.physicsBody = SKPhysicsBody(rectangleOf: player.size)
-        player.physicsBody?.isDynamic = true // Must be true for contacts
+        
+        player.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: 24, height: 24))
+        player.physicsBody?.isDynamic = true
         player.physicsBody?.affectedByGravity = false
-        
-        // Identity
         player.physicsBody?.categoryBitMask = PhysicsCategory.player
-        
-        // Listen for contact with: Enemy Bullets AND PowerUps
-        
         player.physicsBody?.contactTestBitMask = PhysicsCategory.enemyBullet | PhysicsCategory.powerUp
-        
-        // No physical bounce
         player.physicsBody?.collisionBitMask = PhysicsCategory.none
     }
+    
+    private func setupHUD() {
+        waveCountdownLabel = SKLabelNode(fontNamed: "PressStart2P")
+        waveCountdownLabel.fontSize = 20
+        waveCountdownLabel.fontColor = .cyan
+        waveCountdownLabel.horizontalAlignmentMode = .left
+        waveCountdownLabel.position = CGPoint(x: 30, y: 30)
+        waveCountdownLabel.zPosition = 100
+        waveCountdownLabel.text = "\(evolutionInterval)"
+        addChild(waveCountdownLabel)
+        
+        totalWaveLabel = SKLabelNode(fontNamed: "PressStart2P")
+        totalWaveLabel.fontSize = 20
+        totalWaveLabel.fontColor = .white
+        totalWaveLabel.horizontalAlignmentMode = .right
+        totalWaveLabel.position = CGPoint(x: size.width - 30, y: 30)
+        totalWaveLabel.zPosition = 100
+        totalWaveLabel.text = "1"
+        addChild(totalWaveLabel)
+        
+        showTutorialTooltips()
+    }
+    
+    private func showTutorialTooltips() {
+        let leftTip = SKLabelNode(fontNamed: "Arial-BoldMT")
+        leftTip.text = "Waves until Evolution"
+        leftTip.fontSize = 14
+        leftTip.fontColor = .cyan
+        leftTip.horizontalAlignmentMode = .left
+        leftTip.position = CGPoint(x: 30, y: 60)
+        leftTip.zPosition = 100
+        addChild(leftTip)
+        
+        let rightTip = SKLabelNode(fontNamed: "Arial-BoldMT")
+        rightTip.text = "Current Wave"
+        rightTip.fontSize = 14
+        rightTip.fontColor = .white
+        rightTip.horizontalAlignmentMode = .right
+        rightTip.position = CGPoint(x: size.width - 30, y: 60)
+        rightTip.zPosition = 100
+        addChild(rightTip)
+        
+        let fadeSeq = SKAction.sequence([
+            SKAction.wait(forDuration: 5.0),
+            SKAction.fadeOut(withDuration: 1.0),
+            SKAction.removeFromParent()
+        ])
+        leftTip.run(fadeSeq)
+        rightTip.run(fadeSeq)
+    }
+    
+    private func updateHUD() {
+        totalWaveLabel.text = "\(level)"
+        let remainder = level % evolutionInterval
+        let toGo = (remainder == 0) ? 0 : (evolutionInterval - remainder)
+        
+        if toGo == 0 {
+            waveCountdownLabel.text = "EVO!"
+            waveCountdownLabel.fontColor = .yellow
+        } else {
+            waveCountdownLabel.text = "\(toGo)"
+            waveCountdownLabel.fontColor = .cyan
+        }
+    }
+    
+    // --- Wave & Enemy Logic ---
     
     private func spawnEnemy(wave: String) {
         let count = wave.count
         if count == 0 { return }
         
-        // Lock the wave check until all enemies spawned
         pendingEnemies = count
-        
         var actions: [SKAction] = []
         
         for char in wave {
-            // 1. Wait Action (Random 1 to 2 seconds)
-            let waitDuration = Double.random(in: 1.0...2.0)
+            // Faster Spawn Interval
+            let waitDuration = Double.random(in: 0.5...1.0)
             let wait = SKAction.wait(forDuration: waitDuration)
             
-            // 2. Spawn Action
             let spawn = SKAction.run { [weak self] in
                 guard let self = self else { return }
                 
-                // Random X position at the top
                 let randomX = CGFloat.random(in: 30...(self.size.width - 30))
-                let spawnY = self.size.height + 50 // Start slightly off screen
+                let spawnY = self.size.height + 10 // Close spawn
                 
-                // default normal (red)
                 var color: UIColor = .red
                 var type: Enemy.EnemyBulletType = .normal
-                var health = 2
                 
-                //Type t Scatter (purple)
+                // HP Scaling
+                var health = 200 + (self.level * 10)
+                // Step HP Increase every 7 levels
+                health += (self.level / 7) * 100
+                
                 if char == "t" {
                     color = .purple
                     type = .scatter
-                    health = 5
-                }
-                
-                //Type b Bounce (orange)
-                else if char == "b" {
+                    health *= 2
+                } else if char == "b" {
                     color = .orange
                     type = .bounce
-                    health = 3
+                    health = Int(Double(health) * 1.5)
                 }
                 
                 let enemy = Enemy(color: color, size: CGSize(width: 32, height: 32))
@@ -129,15 +214,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 enemy.name = "enemy"
                 enemy.zPosition = 5
                 
-                // Important: Enable AI shooting
                 enemy.shootPattern = .blind
                 
-                // Movement: Slow float down
-                enemy.movePattern = .dive
-                enemy.hSpeed = 0
-                enemy.vSpeed = 30
+                // Movement Randomization
+                let moveRoll = Int.random(in: 0...100)
+                if moveRoll < 40 {
+                    enemy.movePattern = .dive
+                    enemy.vSpeed = CGFloat.random(in: 20...35)
+                    enemy.hSpeed = 0
+                } else if moveRoll < 80 {
+                    enemy.movePattern = .zigzag
+                    enemy.vSpeed = CGFloat.random(in: 5...10)
+                    enemy.hSpeed = CGFloat.random(in: 30...50)
+                } else {
+                    enemy.movePattern = .zigzag
+                    enemy.vSpeed = CGFloat.random(in: 20...30)
+                    enemy.hSpeed = CGFloat.random(in: 20...40)
+                }
                 
-                // Physics
                 enemy.physicsBody = SKPhysicsBody(rectangleOf: enemy.size)
                 enemy.physicsBody?.isDynamic = true
                 enemy.physicsBody?.categoryBitMask = PhysicsCategory.enemy
@@ -146,17 +240,247 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 enemy.physicsBody?.affectedByGravity = false
                 
                 self.addChild(enemy)
-                
-                // One enemy spawned, decrease pending count
                 self.pendingEnemies -= 1
             }
-            
             actions.append(wait)
             actions.append(spawn)
         }
-        
         run(SKAction.sequence(actions))
     }
+    
+    // --- Upgrade Logic ---
+    
+    func generateUpgradeOptions() -> [UpgradeOption] {
+        var options: [UpgradeOption] = []
+        
+        // --- Evolution (Every 6 levels) ---
+        if level % evolutionInterval == 0 {
+            var weaponPool: [UpgradeOption] = []
+            
+            if !hasDoubleShot {
+                weaponPool.append(UpgradeOption(title: "TWIN CANNONS", description: "Fire 2 parallel bullets!") { [weak self] in
+                    self?.hasDoubleShot = true
+                })
+            }
+            if !hasScatterShot {
+                weaponPool.append(UpgradeOption(title: "SCATTER SHOT", description: "Add diagonal spread shots!") { [weak self] in
+                    self?.hasScatterShot = true
+                })
+            }
+            if !hasRicochet {
+                weaponPool.append(UpgradeOption(title: "RICOCHET", description: "Bullets bounce off walls!") { [weak self] in
+                    self?.hasRicochet = true
+                })
+            }
+            if !hasPlasmaField {
+                weaponPool.append(UpgradeOption(title: "PLASMA FIELD", description: "Bullets destroy enemy shots!") { [weak self] in
+                    self?.hasPlasmaField = true
+                })
+            }
+            
+            if !hasLuckBoost {
+                weaponPool.append(UpgradeOption(title: "SUPPLY DROP", description: "PowerUp Chance +10%") { [weak self] in
+                    self?.hasLuckBoost = true
+                    print("Luck Boost Acquired!")
+                })
+            }
+            
+            weaponPool.shuffle()
+            let countToPick = min(3, weaponPool.count)
+            options.append(contentsOf: weaponPool.prefix(countToPick))
+            
+            while options.count < 3 {
+                let dmgBoost = 50 + (level * 5)
+                options.append(UpgradeOption(title: "OVERCHARGE", description: "Damage +\(dmgBoost)") { [weak self] in
+                    self?.playerDamage += dmgBoost
+                })
+            }
+            return options
+        }
+        
+        // --- Normal Levels ---
+        let dmgBoost = 10 + (level * 2)
+        
+        options.append(UpgradeOption(title: "Damage Up", description: "Attack +\(dmgBoost)") { [weak self] in
+            self?.playerDamage += dmgBoost
+        })
+        
+        options.append(UpgradeOption(title: "Rapid Fire", description: "Fire Rate +5%") { [weak self] in
+            guard let self = self else { return }
+            self.baseFireRate = max(0.1, self.baseFireRate - 0.02)
+            if !self.isBerserk { self.playerFireRate = self.baseFireRate }
+        })
+        
+        if currentHearts < maxHearts {
+            options.append(UpgradeOption(title: "Repair", description: "Recover 1 Heart") { [weak self] in
+                self?.damagePlayer(by: -1)
+            })
+        } else {
+            options.append(UpgradeOption(title: "Bounty", description: "Score +1000") { [weak self] in
+                self?.score += 1000
+                self?.scoreLabel.text = "Score: \(self?.score ?? 0)"
+            })
+        }
+        
+        options.shuffle()
+        return options
+    }
+    
+    func showUpgradeMenu() {
+        if isGameOver { return }
+        
+        isPausedForUpgrade = true
+        physicsWorld.speed = 0
+        self.speed = 0 // Freeze animations
+        
+        let overlay = SKShapeNode(rectOf: size)
+        overlay.fillColor = .black
+        overlay.alpha = 0.85
+        overlay.zPosition = 2000
+        overlay.position = CGPoint(x: size.width/2, y: size.height/2)
+        overlay.name = "upgradeOverlay"
+        addChild(overlay)
+        
+        let title = SKLabelNode(fontNamed: "PressStart2P")
+        title.text = (level % evolutionInterval == 0) ? "EVOLUTION" : "UPGRADE"
+        title.fontSize = 32
+        title.position = CGPoint(x: 0, y: 150)
+        title.fontColor = .yellow
+        overlay.addChild(title)
+        
+        let options = generateUpgradeOptions()
+        currentUpgradeOptions = options
+        
+        let startY: CGFloat = 50
+        let gap: CGFloat = 140
+        
+        for (i, option) in options.enumerated() {
+            let card = SKShapeNode(rectOf: CGSize(width: size.width - 80, height: 120), cornerRadius: 15)
+            card.fillColor = UIColor.white.withAlphaComponent(0.1)
+            card.strokeColor = .white
+            card.lineWidth = 2
+            card.position = CGPoint(x: 0, y: startY - CGFloat(i) * gap)
+            card.name = "upgrade_option_\(i)"
+            
+            let optTitle = SKLabelNode(fontNamed: "Arial-BoldMT")
+            optTitle.text = option.title
+            optTitle.fontSize = 24
+            optTitle.position = CGPoint(x: 0, y: 15)
+            card.addChild(optTitle)
+            
+            let optDesc = SKLabelNode(fontNamed: "Arial")
+            optDesc.text = option.description
+            optDesc.fontSize = 16
+            optDesc.position = CGPoint(x: 0, y: -20)
+            card.addChild(optDesc)
+            
+            overlay.addChild(card)
+        }
+    }
+    
+    func selectUpgrade(index: Int) {
+        if index >= currentUpgradeOptions.count { return }
+        
+        let option = currentUpgradeOptions[index]
+        option.action()
+        
+        run(SKAction.playSoundFileNamed("powerup.mp3", waitForCompletion: false))
+        
+        if let overlay = childNode(withName: "upgradeOverlay") {
+            overlay.removeFromParent()
+        }
+        
+        // Use GCD to unfreeze since self.speed is 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+            self.isPausedForUpgrade = false
+            self.physicsWorld.speed = 1.0
+            self.speed = 1.0
+            self.triggerWaveSpawn()
+        }
+    }
+    
+    // --- Visuals Logic ---
+    
+    func addShieldVisual() {
+        if player.childNode(withName: shieldNodeName) != nil { return }
+        
+        let shield = SKSpriteNode(imageNamed: "shield_1")
+        shield.name = shieldNodeName
+        shield.zPosition = 1
+        shield.setScale(1.5)
+        shield.texture?.filteringMode = .nearest
+        
+        var textures: [SKTexture] = []
+        for i in 1...6 {
+            textures.append(SKTexture(imageNamed: "shield_\(i)"))
+        }
+        let animate = SKAction.animate(with: textures, timePerFrame: 0.1)
+        shield.run(SKAction.repeatForever(animate))
+        
+        player.addChild(shield)
+    }
+    
+    func removeShieldVisual() {
+        if let s = player.childNode(withName: shieldNodeName) {
+            s.removeFromParent()
+        }
+    }
+    
+    func activateBerserkMode() {
+        if isBerserk {
+            removeAction(forKey: "berserkTimer")
+        }
+        
+        isBerserk = true
+        playerFireRate = baseFireRate / 2.0
+        print("BERSERK MODE!")
+        
+        // Add visual node instead of changing player texture
+        if player.childNode(withName: berserkNodeName) == nil {
+            let aura = SKSpriteNode(imageNamed: "ship_berserk_1")
+            aura.name = berserkNodeName
+            aura.zPosition = 0.5
+            aura.setScale(1.2)
+            aura.texture?.filteringMode = .nearest
+            
+            var textures: [SKTexture] = []
+            for i in 1...10 {
+                textures.append(SKTexture(imageNamed: "ship_berserk_\(i)"))
+            }
+            let animate = SKAction.animate(with: textures, timePerFrame: 0.05)
+            aura.run(SKAction.repeatForever(animate))
+            
+            player.addChild(aura)
+        }
+        
+        let wait = SKAction.wait(forDuration: 6.0)
+        let endBlock = SKAction.run { [weak self] in
+            self?.deactivateBerserkMode()
+        }
+        run(SKAction.sequence([wait, endBlock]), withKey: "berserkTimer")
+    }
+    
+    func deactivateBerserkMode() {
+        guard isBerserk else { return }
+        isBerserk = false
+        playerFireRate = baseFireRate
+        
+        if let aura = player.childNode(withName: berserkNodeName) {
+            aura.removeFromParent()
+        }
+    }
+    
+    func updatePlayerSkin() {
+        switch currentHearts {
+        case 3: player.texture = SKTexture(imageNamed: "ship_3")
+        case 2: player.texture = SKTexture(imageNamed: "ship_2")
+        case 1: player.texture = SKTexture(imageNamed: "ship_1")
+        default: if currentHearts >= 3 { player.texture = SKTexture(imageNamed: "ship_3") }
+        }
+    }
+    
+    // --- Game Lifecycle ---
     
     override func didMove(to view: SKView) {
         backgroundColor = .black
@@ -164,36 +488,387 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         physicsWorld.contactDelegate = self
         
         let bgm = SKAudioNode(fileNamed: "song.mp3")
-                bgm.autoplayLooped = true // looping forever
-                bgm.name = "backgroundMusic" //easier to stop it when gameover
-                addChild(bgm)
-                print("sound: song.mp3")
+        bgm.autoplayLooped = true
+        bgm.name = "backgroundMusic"
+        addChild(bgm)
         
         setupPlayer()
-        spawnEnemy(wave: "t")
-        sceneWidth = size.width
-        sceneHeight = size.height
         setupHearts()
         scoreLabel = setupScoreLabel()
+        setupHUD()
+        setupDebugButton()
+        setupTestButton()
+        
+        spawnEnemy(wave: "11")
+    }
+    
+    func setupDebugButton() {
+        let debugBtn = SKLabelNode(fontNamed: "Arial-BoldMT")
+        debugBtn.text = "[ TEST EVO ]"
+        debugBtn.fontSize = 20
+        debugBtn.fontColor = .red
+        debugBtn.position = CGPoint(x: size.width - 80, y: size.height - 100)
+        debugBtn.zPosition = 1000
+        debugBtn.name = "debugButton"
+        addChild(debugBtn)
+    }
+    
+    func setupTestButton() {
+        let btn = SKLabelNode(fontNamed: "Arial-BoldMT")
+        btn.text = "[ TEST DROP ]"
+        btn.fontSize = 20
+        btn.fontColor = .cyan
+        // Position top-right (below where debug button usually is)
+        btn.position = CGPoint(x: size.width - 80, y: size.height - 140)
+        btn.zPosition = 1000
+        btn.name = "testDropButton"
+        addChild(btn)
+    }
+    
+    func triggerTestEvolution() {
+        let nextEvoLevel = (level / evolutionInterval + 1) * evolutionInterval
+        level = nextEvoLevel
+        updateHUD()
+        showUpgradeMenu()
+    }
+    
+    func spawnRandomPowerUp(at position: CGPoint) {
+        var availableTypes: [PowerUp.PowerType] = [.shield, .berserk]
+        
+        if currentHearts < maxHearts {
+            availableTypes.append(.heal)
+        }
+        
+        let selectedType = availableTypes.randomElement()!
+        let p = PowerUp(type: selectedType, position: position)
+        addChild(p)
+    }
+    
+    func startNextWave() {
+        level += 1
+        updateHUD()
+        
+        if level % 2 == 0 {
+            showUpgradeMenu()
+        } else {
+            triggerWaveSpawn()
+        }
+    }
+    
+    func triggerWaveSpawn() {
+        var enemyCount = 1
+        if level <= 2 { enemyCount = 1 }
+        else if level <= 5 { enemyCount = 2 }
+        else if level <= 9 { enemyCount = 3 }
+        else if level <= 13 { enemyCount = 4 }
+        else { enemyCount = min(6, 4 + (level - 13)) }
+        
+        var waveString = ""
+        if level % 5 == 0 {
+            waveString = "tbt"
+        } else {
+            for _ in 0..<enemyCount {
+                let r = Int.random(in: 0...2)
+                switch r {
+                case 0: waveString += "1"
+                case 1: waveString += "t"
+                case 2: waveString += "b"
+                default: waveString += "1"
+                }
+            }
+        }
+        spawnEnemy(wave: waveString)
+        print("Starting Level \(level) with \(enemyCount) enemies")
+    }
+    
+    // --- Input & Updates ---
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let location = touch.location(in: self)
+        let nodes = nodes(at: location)
+        
+        // Debug
+        for node in nodes {
+            if node.name == "debugButton" {
+                triggerTestEvolution()
+                return
+            }
+            if node.name == "testDropButton" {
+                // Spawn at a random X at the top of the screen
+                let randomX = CGFloat.random(in: 30...(size.width - 30))
+                spawnRandomPowerUp(at: CGPoint(x: randomX, y: size.height))
+                return
+            }
+        }
+        
+        if isPausedForUpgrade {
+            for node in nodes {
+                let name = node.name ?? node.parent?.name ?? ""
+                if name.starts(with: "upgrade_option_") {
+                    if let char = name.last, let index = Int(String(char)) {
+                        selectUpgrade(index: index)
+                    }
+                    return
+                }
+            }
+            return
+        }
+        
+        if isGameOver {
+            for node in nodes {
+                if node.name == "restartButton" { restartGame() }
+            }
+            return
+        }
+        
+        pressHold = true
+        shoot()
+    }
+    
+    override func update(_ currentTime: TimeInterval) {
+        if isGameOver || isPausedForUpgrade { return }
+        
+        let dt : TimeInterval
+        if lastUpdateTime == 0 { dt = 0 }
+        else { dt = currentTime - lastUpdateTime }
+        lastUpdateTime = currentTime
+        
+        for node in children {
+            if let enemy = node as? Enemy {
+                enemy.updateAI(deltaTime: dt, scene: self)
+            }
+            if let bullet = node as? Bullet {
+                bullet.updateBullet(deltaTime: dt, scene: self)
+            }
+        }
+        
+        checkWaveStatus()
+        
+        if isPausedForShot {
+            if currentTime - lastShotTime >= playerFireRate {
+                isPausedForShot = false
+                if pressHold {
+                    shoot()
+                    return
+                }
+            } else {
+                return
+            }
+        }
+        
+        let dx = playerMoveSpeed * CGFloat(dt) * movementDirection
+        player.position.x += dx
+        
+        let halfW = player.size.width * 0.5
+        if player.position.x <= halfW {
+            player.position.x = halfW
+            movementDirection = 1.0
+        } else if player.position.x >= size.width - halfW {
+            player.position.x = size.width - halfW
+            movementDirection = -1.0
+        }
+    }
+    
+    func shoot() {
+        guard !isPausedForShot else { return }
+        isPausedForShot = true
+        lastShotTime = CACurrentMediaTime()
+        run(SKAction.playSoundFileNamed("shoot.wav", waitForCompletion: false))
+        
+        var bulletTextures: [SKTexture] = []
+        for i in 1...4 {
+            bulletTextures.append(SKTexture(imageNamed: "bullet_\(i)"))
+        }
+        let bulletAnimation = SKAction.animate(with: bulletTextures, timePerFrame: 0.1)
+        
+        func createBullet(offsetX: CGFloat, angle: CGFloat) {
+            let bullet = Bullet(texture: bulletTextures[0], size: CGSize(width: 20, height: 40))
+            bullet.owner = .player
+            bullet.damage = self.playerDamage
+            bullet.position = CGPoint(x: player.position.x + offsetX, y: player.position.y + 40)
+            bullet.zPosition = 8
+            
+            bullet.run(SKAction.repeatForever(bulletAnimation))
+            
+            let dirX = -sin(angle)
+            let dirY = cos(angle)
+            bullet.direction = normalize(CGPoint(x: dirX, y: dirY))
+            bullet.zRotation = angle
+            
+            bullet.bulletSpeed = 500
+            bullet.acceleration = 0
+            
+            if hasRicochet {
+                bullet.bounceCount = 1
+            } else {
+                bullet.bounceCount = 0
+            }
+            bullet.bounceCelling = false
+            bullet.bounceFloor = false
+            
+            bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
+            bullet.physicsBody?.categoryBitMask = PhysicsCategory.bullet
+            bullet.physicsBody?.contactTestBitMask = PhysicsCategory.enemy | PhysicsCategory.enemyBullet
+            bullet.physicsBody?.collisionBitMask = PhysicsCategory.none
+            bullet.physicsBody?.affectedByGravity = false
+            bullet.physicsBody?.isDynamic = true
+            
+            addChild(bullet)
+        }
+        
+        if hasDoubleShot {
+            createBullet(offsetX: -10, angle: 0)
+            createBullet(offsetX: 10, angle: 0)
+        } else {
+            createBullet(offsetX: 0, angle: 0)
+        }
+        
+        if hasScatterShot {
+            createBullet(offsetX: -20, angle: 0.3)
+            createBullet(offsetX: 20, angle: -0.3)
+        }
+    }
+    
+    // --- Collisions & Events ---
+    
+    func didBegin(_ contact: SKPhysicsContact) {
+        guard let nodeA = contact.bodyA.node, let nodeB = contact.bodyB.node else { return }
+        let maskA = contact.bodyA.categoryBitMask
+        let maskB = contact.bodyB.categoryBitMask
+        
+        // 1. Bullet vs Enemy
+        if maskA == PhysicsCategory.bullet && maskB == PhysicsCategory.enemy {
+            handleHit(bullet: nodeA, enemy: nodeB)
+        } else if maskB == PhysicsCategory.bullet && maskA == PhysicsCategory.enemy {
+            handleHit(bullet: nodeB, enemy: nodeA)
+        }
+        
+        // 2. Plasma Field
+        else if hasPlasmaField {
+            if (maskA == PhysicsCategory.bullet && maskB == PhysicsCategory.enemyBullet) {
+                nodeA.removeFromParent()
+                nodeB.removeFromParent()
+            } else if (maskB == PhysicsCategory.bullet && maskA == PhysicsCategory.enemyBullet) {
+                nodeA.removeFromParent()
+                nodeB.removeFromParent()
+            }
+        }
+        
+        // 3. Player vs PowerUp
+        if maskA == PhysicsCategory.player && maskB == PhysicsCategory.powerUp {
+            collectPowerUp(playerNode: nodeA, powerUpNode: nodeB)
+        } else if maskB == PhysicsCategory.player && maskA == PhysicsCategory.powerUp {
+            collectPowerUp(playerNode: nodeB, powerUpNode: nodeA)
+        }
+        
+        // 4. Enemy Bullet vs Player
+        else if maskA == PhysicsCategory.player && maskB == PhysicsCategory.enemyBullet {
+            damagePlayer(by: 1)
+            nodeB.removeFromParent()
+        } else if maskB == PhysicsCategory.player && maskA == PhysicsCategory.enemyBullet {
+            damagePlayer(by: 1)
+            nodeA.removeFromParent()
+        }
+    }
+    
+    func collectPowerUp(playerNode: SKNode, powerUpNode: SKNode) {
+        guard let item = powerUpNode as? PowerUp else { return }
+        item.removeFromParent()
+        
+        run(SKAction.playSoundFileNamed("powerup.mp3", waitForCompletion: false))
+        
+        switch item.type {
+        case .shield:
+            if !hasShield {
+                hasShield = true
+                addShieldVisual()
+            } else {
+                score += 500
+                scoreLabel.text = "Score: \(score)"
+            }
+        case .heal:
+            if currentHearts < maxHearts { damagePlayer(by: -1) }
+        case .berserk:
+            activateBerserkMode()
+        }
+    }
+    
+    func damagePlayer(by amount: Int = 1) {
+        if isGameOver { return }
+        
+        if amount < 0 {
+            currentHearts -= amount
+            if currentHearts > maxHearts { currentHearts = maxHearts }
+            updateHearts()
+            updatePlayerSkin()
+            return
+        }
+        
+        if hasShield {
+            hasShield = false
+            removeShieldVisual()
+            return
+        }
+        
+        if isInvincible { return }
+        
+        currentHearts -= amount
+        if currentHearts < 0 { currentHearts = 0 }
+        
+        updateHearts()
+        updatePlayerSkin()
+        
+        isInvincible = true
+        let blink = SKAction.sequence([SKAction.fadeAlpha(to: 0.5, duration: 0.1), SKAction.fadeAlpha(to: 1.0, duration: 0.1)])
+        let action = SKAction.sequence([SKAction.repeat(blink, count: 10), SKAction.run { [weak self] in self?.isInvincible = false; self?.player.alpha = 1.0 }])
+        player.run(action)
+        
+        if currentHearts == 0 { triggerGameOver() }
+    }
+    
+    func checkWaveStatus() {
+        if isSpawning { return }
+        let enemies = children.filter { $0 is Enemy }
+        if enemies.isEmpty && pendingEnemies == 0 {
+            isSpawning = true
+            let wait = SKAction.wait(forDuration: 1.0)
+            let spawn = SKAction.run { [weak self] in
+                self?.startNextWave()
+                self?.isSpawning = false
+            }
+            run(SKAction.sequence([wait, spawn]))
+        }
+    }
+    
+    private func handleHit(bullet: SKNode, enemy: SKNode) {
+        if let enemy = enemy as? Enemy, let bullet = bullet as? Bullet {
+            enemy.applyDamage(bullet.damage)
+            if enemy.health <= 0 { enemyDestroyed(enemy) }
+        }
+        bullet.removeFromParent()
+    }
+    
+    func enemyDestroyed(_ enemy: Enemy) {
+        score += 100
+        scoreLabel.text = "Score: \(score)"
+        
+        let dropChance = hasLuckBoost ? 30 : 20
+        
+        if Int.random(in: 0...100) < dropChance {
+            spawnRandomPowerUp(at: enemy.position)
+        }
+        enemy.removeFromParent()
     }
     
     private func setupHearts() {
-        
-        let bottomPadding: CGFloat = 30    // distance from bottom of screen
-        let spacing: CGFloat = 60          // space between hearts
-        
-        // total width occupied by all hearts (distance between first and last)
+        let spacing: CGFloat = 60
         let totalWidth = CGFloat(maxHearts - 1) * spacing
-        
-        // x of the FIRST heart so that the whole row is centered
         let startX = size.width / 2 - totalWidth / 2
-        let y = bottomPadding
-        
         for i in 0..<maxHearts {
             let heart = SKSpriteNode(imageNamed: "heart_full")
             heart.setScale(0.05)
-            let x = startX + CGFloat(i) * spacing
-            heart.position = CGPoint(x: x, y: y)
+            heart.position = CGPoint(x: startX + CGFloat(i) * spacing, y: 30)
             heart.zPosition = 100
             addChild(heart)
             heartNodes.append(heart)
@@ -210,409 +885,93 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
     
-    func damagePlayer(by amount: Int = 1) {
-        guard currentHearts > 0 else { return }
-        currentHearts -= amount
-        if currentHearts < 0 {
-            currentHearts = 0
-        }
-        
-        updateHearts()
-        
-        switch currentHearts {
-        case 3:
-            player.texture = SKTexture(imageNamed: "ship_3") // 3 hp
-        case 2:
-            player.texture = SKTexture(imageNamed: "ship_2") // 2 hp
-        case 1:
-            player.texture = SKTexture(imageNamed: "ship_1") // 1 hp
-        default:
-            // other case hold ship_1 for now
-            break
-        }
-        
-        // add an effect for getting damaged
-        let fadeOut = SKAction.fadeAlpha(to: 0.5, duration: 0.1)
-        let fadeIn = SKAction.fadeAlpha(to: 1.0, duration: 0.1)
-        player.run(SKAction.sequence([fadeOut, fadeIn, fadeOut, fadeIn]))
-        
-        if currentHearts == 0 {
-            //sound
-            run(SKAction.playSoundFileNamed("death.mp3", waitForCompletion: false))
-            print("sound: death.mp3")
-            
-            // Game Over Logic
-            triggerGameOver()
-        }
-    }
-    
-    func triggerGameOver() {
-        // game over
-        isGameOver = true
-        
-        // remove ship
-        player.removeFromParent()
-        
-        // stop bgm when gameover
-        if let bgm = childNode(withName: "backgroundMusic") {
-            bgm.removeFromParent()
-        }
-        
-        // show GAME OVER
-        let goLabel = SKLabelNode(fontNamed: "PressStart2P")
-        goLabel.text = "GAME OVER"
-        goLabel.fontSize = 40
-        goLabel.fontColor = .red
-        goLabel.position = CGPoint(x: size.width/2, y: size.height/2 + 20)
-        goLabel.zPosition = 1000
-        addChild(goLabel)
-        
-        // show final score
-        let finalScoreLabel = SKLabelNode(fontNamed: "PressStart2P")
-        finalScoreLabel.text = "Final Score: \(score)"
-        finalScoreLabel.fontSize = 24
-        finalScoreLabel.fontColor = .white
-        finalScoreLabel.position = CGPoint(x: size.width/2, y: size.height/2 - 40)
-        finalScoreLabel.zPosition = 1000
-        addChild(finalScoreLabel)
-        // restart button
-        let restartBtn = SKLabelNode(fontNamed: "PressStart2P")
-        restartBtn.text = "RESTART"
-        restartBtn.fontSize = 30
-        restartBtn.fontColor = .yellow
-        restartBtn.position = CGPoint(x: size.width/2, y: size.height/2 - 100)
-        restartBtn.zPosition = 1000
-        restartBtn.name = "restartButton"
-        addChild(restartBtn)
-        
-        // hide the score showing in game
-        scoreLabel.isHidden = true
-    }
-    
-    func showGameOverLabel() {
-        let label = SKLabelNode(fontNamed: "PressStart2P") // 或者是 "Helvetica-Bold"
-        label.text = "GAME OVER"
-        label.fontSize = 40
-        label.fontColor = .white
-        label.position = CGPoint(x: size.width/2, y: size.height/2)
-        label.zPosition = 100
-        addChild(label)
-    }
-    
-    override func update(_ currentTime: TimeInterval) {
-        if isGameOver { return }
-        
-        let dt : TimeInterval
-        if lastUpdateTime == 0 {
-            dt = 0
-        } else {
-            dt = currentTime - lastUpdateTime
-        }
-        lastUpdateTime = currentTime
-        
-        for node in children {
-            if let enemy = node as? Enemy {
-                enemy.updateAI(deltaTime: dt, scene: self)
-            }
-            if let bullet = node as? Bullet {
-                bullet.updateBullet(deltaTime: dt, scene: self)
-            }
-        }
-        
-        checkWaveStatus()
-        
-        // Shoot pause
-        if isPausedForShot {
-            if currentTime - lastShotTime >= pauseDuration {
-                isPausedForShot = false
-                if pressHold {
-                    shoot()
-                    return
-                }
-            } else {
-                return
-            }
-        }
-        
-        // Player Movement
-        let dx = playerSpeed * CGFloat(dt) * movementDirection
-        player.position.x += dx
-        
-        // bounce at edges
-        let halfW = player.size.width * 0.5
-        if player.position.x <= halfW {
-            player.position.x = halfW
-            movementDirection = 1.0
-        } else if player.position.x >= size.width - halfW {
-            player.position.x = size.width - halfW
-            movementDirection = -1.0
-        }
-        
-        
-    }
-    
-    
-    func checkWaveStatus() {
-        if isSpawning { return } // If already preparing next wave, wait
-        
-        let enemies = children.filter { $0 is Enemy }
-        if enemies.isEmpty && pendingEnemies == 0 {
-            isSpawning = true
-            
-            // Wait 1.5 seconds before starting next wave
-            let wait = SKAction.wait(forDuration: 1.5)
-            let spawn = SKAction.run { [weak self] in
-                self?.startNextWave()
-                self?.isSpawning = false
-            }
-            run(SKAction.sequence([wait, spawn]))
-        }
-    }
-    
-    func startNextWave() {
-        level += 1
-        
-        let enemyCount = min(level + 1, 6) // 最多4个，防止太挤
-        var waveString = ""
-        
-        if level % 5 == 0 {
-            waveString = "tbt"
-        } else {
-            // 普通波次：三种怪物概率完全相等 (1/3)
-            for _ in 0..<enemyCount {
-                // 生成一个 0 到 2 的随机整数
-                let roll = Int.random(in: 0...2)
-                
-                switch roll {
-                case 0:
-                    waveString += "1" // 普通怪 (红色)
-                case 1:
-                    waveString += "t" // 散弹怪 (紫色)
-                case 2:
-                    waveString += "b" // 弹射怪 (橙色)
-                default:
-                    waveString += "1"
-                }
-            }
-        }
-        
-        spawnEnemy(wave: waveString)
-        print("Starting Level \(level)")
-    }
-    
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
-        let location = touch.location(in: self)
-        let tappedNodes = nodes(at: location)
-        
-        if isGameOver {
-            for node in tappedNodes {
-                if node.name == "restartButton" {
-                    restartGame()
-                }
-            }
-            return
-        }
-        
-        pressHold = true
-        shoot()
-    }
-    
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        pressHold = false
-    }
-    
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        pressHold = false
-    }
-    
-    func shoot() {
-        
-        guard !isPausedForShot else { return }
-        isPausedForShot = true
-        lastShotTime = CACurrentMediaTime()
-        func fireBullet(offsetX: CGFloat, angle: CGFloat) {
-            
-            let bullet = Bullet(color: .yellow, size: CGSize(width: 25, height: 15))
-            bullet.owner = .player
-            bullet.damage = 2
-            bullet.zPosition = 8
-            bullet.position = CGPoint(
-                x: player.position.x + offsetX,
-                y: player.position.y + player.size.height
-            )
-            
-            let dirX = -sin(angle)
-            let dirY = cos(angle)
-            
-            bullet.direction = normalize(CGPoint(x: dirX, y: dirY))
-            
-            bullet.zRotation = atan2(bullet.direction.y, bullet.direction.x)
-            
-            bullet.bulletSpeed = 300
-            bullet.acceleration = 0
-            
-            // Only bounce at high levels
-            if playerWeaponLevel >= 4 {
-                bullet.bounceCount = 2
-            } else {
-                bullet.bounceCount = 0
-            }
-            bullet.bounceCelling = false
-            bullet.bounceFloor = false
-            
-            bullet.physicsBody = SKPhysicsBody(rectangleOf: bullet.size)
-            bullet.physicsBody?.categoryBitMask = PhysicsCategory.bullet
-            bullet.physicsBody?.contactTestBitMask = PhysicsCategory.enemy
-            bullet.physicsBody?.collisionBitMask = PhysicsCategory.none
-            bullet.physicsBody?.affectedByGravity = false
-            bullet.physicsBody?.isDynamic = true
-            
-            // Add to scene
-            addChild(bullet)
-        }
-        
-        switch playerWeaponLevel {
-        case 1:
-            // Level 1: Single shot straight up
-            // 单发，垂直向上
-            fireBullet(offsetX: 0, angle: 0)
-            
-        case 2:
-            // Level 2: Double shot, slightly offset left and right
-            // 双发，向左和向右轻微偏移
-            fireBullet(offsetX: -10, angle: 0)
-            fireBullet(offsetX: 10, angle: 0)
-            
-        case 3:
-            // Level 3: Shotgun/Spread (Center + Left Angle + Right Angle)
-            // 散弹（中间直射 + 左斜射 + 右斜射）
-            fireBullet(offsetX: 0, angle: 0)       // Center / 中
-            fireBullet(offsetX: -15, angle: 0.3)   // Left / 左 (~17 degrees)
-            fireBullet(offsetX: 15, angle: -0.3)   // Right / 右 (~17 degrees)
-            
-        default:
-            // Max Level / Fallback: 5-way spread
-            // 最高等级：5向散弹
-            fireBullet(offsetX: 0, angle: 0)
-            fireBullet(offsetX: -15, angle: 0.2)
-            fireBullet(offsetX: 15, angle: -0.2)
-            fireBullet(offsetX: -30, angle: 0.4)
-            fireBullet(offsetX: 30, angle: -0.4)
-        }
-    }
-    
-    func didBegin(_ contact: SKPhysicsContact) {
-        // Safe check to fix fatal error
-        guard let nodeA = contact.bodyA.node,
-              let nodeB = contact.bodyB.node else {
-            return
-        }
-        
-        let maskA = contact.bodyA.categoryBitMask
-        let maskB = contact.bodyB.categoryBitMask
-        
-        // 1. Player Bullet hits Enemy
-        
-        if maskA == PhysicsCategory.bullet && maskB == PhysicsCategory.enemy {
-            handleHit(bullet: nodeA, enemy: nodeB)
-        }
-        else if maskB == PhysicsCategory.bullet && maskA == PhysicsCategory.enemy {
-            handleHit(bullet: nodeB, enemy: nodeA)
-        }
-        
-        // 2. Player hits PowerUp (Fix for blue box passing through)
-        
-        else if maskA == PhysicsCategory.player && maskB == PhysicsCategory.powerUp {
-            collectPowerUp(playerNode: nodeA, powerUpNode: nodeB)
-        }
-        else if maskB == PhysicsCategory.player && maskA == PhysicsCategory.powerUp {
-            collectPowerUp(playerNode: nodeB, powerUpNode: nodeA)
-        }
-        
-        // 3. Enemy Bullet hits Player (Fix for no damage)
-        
-        else if maskA == PhysicsCategory.player && maskB == PhysicsCategory.enemyBullet {
-            damagePlayer(by: 1)
-            nodeB.removeFromParent() // Remove bullet / 移除子弹
-        }
-        else if maskB == PhysicsCategory.player && maskA == PhysicsCategory.enemyBullet {
-            damagePlayer(by: 1)
-            nodeA.removeFromParent() // Remove bullet / 移除子弹
-        }
-    }
-    
-    func collectPowerUp(playerNode: SKNode, powerUpNode: SKNode) {
-        powerUpNode.removeFromParent()
-        
-        run(SKAction.playSoundFileNamed("powerup.mp3", waitForCompletion: false))
-        print("sound：powerup.mp3")
-        
-        // upgrade weapon
-        if playerWeaponLevel < 3 {
-            playerWeaponLevel += 1
-            print("Weapon Upgraded to level \(playerWeaponLevel)!")
-            // can add effects or sound here
-        }
-        
-        // if +HP item
-        // damagePlayer(by: -1)
-    }
-    
-    private func handleHit(bullet: SKNode, enemy: SKNode) {
-        if let enemy = enemy as? Enemy, let bullet = bullet as?
-            Bullet {
-            enemy.applyDamage(bullet.damage)
-            
-            if enemy.health <= 0 {
-                enemyDestroyed(enemy)
-            }
-        }
-        bullet.removeFromParent()
-    }
-    
-    func enemyDestroyed(_ enemy: Enemy) {
-        score += 100
-        scoreLabel.text = "Score: \(score)"
-        
-        // twenty percent drop a weapon powerup
-        if Int.random(in: 0...100) < 20 {
-            let powerUp = PowerUp(type: .weaponUpgrade, position: enemy.position)
-            addChild(powerUp)
-        }
-        
-        enemy.removeFromParent()
-    }
-    
     func setupScoreLabel () -> SKLabelNode {
         let label = SKLabelNode(fontNamed: "PressStart2P")
         label.fontSize = 24
-        label.zPosition = 100;
-        
-        label.position = CGPoint(
-            x: size.width / 2,
-            y: size.height - 60
-        )
+        label.zPosition = 100
+        label.position = CGPoint(x: size.width / 2, y: size.height - 60)
         label.text = "Score: \(score)"
         addChild(label)
         return label
     }
     
+    func triggerGameOver() {
+        isGameOver = true
+        player.removeFromParent()
+        if let bgm = childNode(withName: "backgroundMusic") { bgm.removeFromParent() }
+        
+        let go = SKLabelNode(fontNamed: "PressStart2P")
+        go.text = "GAME OVER"
+        go.fontSize = 40
+        go.fontColor = .red
+        go.position = CGPoint(x: size.width/2, y: size.height/2 + 40)
+        go.zPosition = 1000
+        addChild(go)
+        
+        let fs = SKLabelNode(fontNamed: "PressStart2P")
+        fs.text = "Final: \(score)"
+        fs.fontSize = 24
+        fs.position = CGPoint(x: size.width/2, y: size.height/2)
+        fs.zPosition = 1000
+        addChild(fs)
+        
+        let rb = SKLabelNode(fontNamed: "PressStart2P")
+        rb.text = "RESTART"
+        rb.fontSize = 30
+        rb.fontColor = .yellow
+        rb.position = CGPoint(x: size.width/2, y: size.height/2 - 100)
+        rb.zPosition = 1000
+        rb.name = "restartButton"
+        addChild(rb)
+        
+        scoreLabel.isHidden = true
+    }
+    
     func restartGame() {
         removeAllChildren()
+        heartNodes.removeAll()
         
         isGameOver = false
+        isInvincible = false
+        isBerserk = false
+        hasShield = false
+        
         score = 0
         level = 0
         currentHearts = 3
-        playerWeaponLevel = 1
+        
+        playerDamage = 80
+        playerMoveSpeed = 150
+        baseFireRate = 0.6
+        playerFireRate = 0.6
+        
+        hasDoubleShot = false
+        hasScatterShot = false
+        hasRicochet = false
+        hasPlasmaField = false
+        hasLuckBoost = false
+        
         pendingEnemies = 0
         isSpawning = false
+        
+        self.speed = 1.0
+        physicsWorld.speed = 1.0
         
         setupPlayer()
         setupHearts()
         scoreLabel = setupScoreLabel()
-
+        setupHUD()
+        setupDebugButton()
+        setupTestButton()
+        
+        let bgm = SKAudioNode(fileNamed: "song.mp3")
+        bgm.autoplayLooped = true
+        bgm.name = "backgroundMusic"
+        addChild(bgm)
+        
         spawnEnemy(wave: "11")
     }
+    
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { pressHold = false }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { pressHold = false }
 }
