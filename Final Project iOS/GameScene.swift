@@ -10,6 +10,7 @@ import SpriteKit
 class GameScene: SKScene, SKPhysicsContactDelegate {
     public var sceneWidth: CGFloat = 0
     public var sceneHeight: CGFloat = 0
+    var deviceScale: CGFloat = 1.0
     
     // Player
     var player : SKSpriteNode!
@@ -197,15 +198,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private func setupPlayer() {
         player = SKSpriteNode(imageNamed: "ship_3")
-        player.size = CGSize(width: 48, height: 48)
+        player.size = CGSize(width: 48 * deviceScale, height: 48 * deviceScale)
         player.setScale(1.5)
         player.texture?.filteringMode = .nearest
         
-        player.position = CGPoint(x: size.width * 0.5, y: 100)
+        player.position = CGPoint(x: size.width * 0.5, y: 100 * deviceScale)
         player.zPosition = 10
         addChild(player)
         
-        player.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: 24, height: 24))
+        player.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: 24 * deviceScale, height: 24 * deviceScale))
         player.physicsBody?.isDynamic = true
         player.physicsBody?.affectedByGravity = false
         player.physicsBody?.categoryBitMask = PhysicsCategory.player
@@ -226,14 +227,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
         let title = SKLabelNode(fontNamed: "PressStart2P")
         title.text = "SPACE BOUNCE"
-        title.fontSize = 44
-        title.position = CGPoint(x: 0, y: 100)
+        title.fontSize = 44 * deviceScale
+        title.position = CGPoint(x: 0, y: 100 * deviceScale)
         title.fontColor = .white
         overlay.addChild(title)
     
         let start = SKLabelNode(fontNamed: "PressStart2P")
         start.text = "START"
-        start.fontSize = 28
+        start.fontSize = 28 * deviceScale
         start.fontColor = .green
         start.position = CGPoint(x: 0, y: 0)
         start.name = "startButton"
@@ -241,21 +242,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
         let help = SKLabelNode(fontNamed: "Arial")
         help.text = "Tap to shoot. Survive waves."
-        help.position = CGPoint(x: 0, y: -60)
-        help.fontSize = 14
+        help.position = CGPoint(x: 0, y: -60 * deviceScale)
+        help.fontSize = 14 * deviceScale
         help.fontColor = .lightGray
         overlay.addChild(help)
         
         // Local Highscore
         let localLabel = SKLabelNode(text: "Local Highscore: \(localHighScore)")
-        localLabel.fontSize = 32
-        localLabel.position = CGPoint(x: 0, y: -90)
+        localLabel.fontSize = 32 * deviceScale
+        localLabel.position = CGPoint(x: 0, y: -90 * deviceScale)
         overlay.addChild(localLabel)
         
         // Global Highscore
         showGlobalScore()
-        globalLabel.fontSize = 28
-        globalLabel.position = CGPoint(x: 0, y: -120)
+        globalLabel.fontSize = 28 * deviceScale
+        globalLabel.position = CGPoint(x: 0, y: -120 * deviceScale)
         overlay.addChild(globalLabel)
     }
 
@@ -299,19 +300,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     private func setupHUD() {
         waveCountdownLabel = SKLabelNode(fontNamed: "PressStart2P")
-        waveCountdownLabel.fontSize = 20
+        waveCountdownLabel.fontSize = 20 * deviceScale
         waveCountdownLabel.fontColor = .cyan
         waveCountdownLabel.horizontalAlignmentMode = .left
-        waveCountdownLabel.position = CGPoint(x: 30, y: 30)
+        waveCountdownLabel.position = CGPoint(x: 30 * deviceScale, y: 30 * deviceScale)
         waveCountdownLabel.zPosition = 100
         waveCountdownLabel.text = "\(evolutionInterval)"
         addChild(waveCountdownLabel)
         
         totalWaveLabel = SKLabelNode(fontNamed: "PressStart2P")
-        totalWaveLabel.fontSize = 20
+        totalWaveLabel.fontSize = 20 * deviceScale
         totalWaveLabel.fontColor = .white
         totalWaveLabel.horizontalAlignmentMode = .right
-        totalWaveLabel.position = CGPoint(x: size.width - 30, y: 30)
+        totalWaveLabel.position = CGPoint(x: size.width - 30 * deviceScale, y: 30 * deviceScale)
         totalWaveLabel.zPosition = 100
         totalWaveLabel.text = "1"
         addChild(totalWaveLabel)
@@ -322,19 +323,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func showTutorialTooltips() {
         let leftTip = SKLabelNode(fontNamed: "Arial-BoldMT")
         leftTip.text = "Waves until Evolution"
-        leftTip.fontSize = 14
+        leftTip.fontSize = 14 * deviceScale
         leftTip.fontColor = .cyan
         leftTip.horizontalAlignmentMode = .left
-        leftTip.position = CGPoint(x: 30, y: 60)
+        leftTip.position = CGPoint(x: 30 * deviceScale, y: 60 * deviceScale)
         leftTip.zPosition = 100
         addChild(leftTip)
         
         let rightTip = SKLabelNode(fontNamed: "Arial-BoldMT")
         rightTip.text = "Current Wave"
-        rightTip.fontSize = 14
+        rightTip.fontSize = 14 * deviceScale
         rightTip.fontColor = .white
         rightTip.horizontalAlignmentMode = .right
-        rightTip.position = CGPoint(x: size.width - 30, y: 60)
+        rightTip.position = CGPoint(x: size.width - 30 * deviceScale, y: 60 * deviceScale)
         rightTip.zPosition = 100
         addChild(rightTip)
         
@@ -364,9 +365,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     func setupPauseButton() {
         let p = SKLabelNode(fontNamed: "Arial-BoldMT")
         p.text = "II"
-        p.fontSize = 20
+        p.fontSize = 20 * deviceScale
         p.fontColor = .white
-        p.position = CGPoint(x: 30, y: size.height - 40)
+        p.position = CGPoint(x: 30, y: size.height - 40 * deviceScale)
         p.name = "pauseButton"
         p.zPosition = 1000
         addChild(p)
@@ -384,17 +385,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
         let resume = SKLabelNode(fontNamed: "PressStart2P")
         resume.text = "RESUME"
-        resume.fontSize = 30
+        resume.fontSize = 30 * deviceScale
         resume.fontColor = .green
-        resume.position = CGPoint(x: 0, y: 40)
+        resume.position = CGPoint(x: 0, y: 40 * deviceScale)
         resume.name = "resumeButton"
         overlay.addChild(resume)
     
         let restart = SKLabelNode(fontNamed: "PressStart2P")
         restart.text = "RESTART"
-        restart.fontSize = 30
+        restart.fontSize = 30 * deviceScale
         restart.fontColor = .yellow
-        restart.position = CGPoint(x: 0, y: -40)
+        restart.position = CGPoint(x: 0, y: -40 * deviceScale)
         restart.name = "restartButton"
         overlay.addChild(restart)
         showTutorialTooltips()
@@ -421,8 +422,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let spawn = SKAction.run { [weak self] in
                 guard let self = self else { return }
                 
-                let randomX = CGFloat.random(in: 30...(self.size.width - 30))
-                let spawnY = self.size.height + 10
+                let randomX = CGFloat.random(in: 30...(self.size.width - 30 * deviceScale))
+                let spawnY = self.size.height + 10 * deviceScale
                 
                 var imageName = "Nautolan Ship - Fighter - Base"
                 var type: Enemy.EnemyBulletType = .normal
@@ -442,7 +443,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 
                 let texture = SKTexture(imageNamed: imageName)
                 texture.filteringMode = .nearest
-                let visualSize = CGSize(width: 64, height: 64)
+                let visualSize = CGSize(width: 64 * deviceScale, height: 64 * deviceScale)
                 let enemy = Enemy(texture: texture, color: .clear, size: visualSize)
                 
                 enemy.health = health
@@ -472,7 +473,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     enemy.hSpeed = CGFloat.random(in: 20...40)
                 }
                 
-                let physicsSize = CGSize(width: 36, height: 36)
+                let physicsSize = CGSize(width: 48 * deviceScale, height: 48 * deviceScale)
                 enemy.physicsBody = SKPhysicsBody(rectangleOf: physicsSize)
                 enemy.physicsBody?.isDynamic = true
                 enemy.physicsBody?.categoryBitMask = PhysicsCategory.enemy
@@ -587,35 +588,35 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         let title = SKLabelNode(fontNamed: "PressStart2P")
         title.text = (level % evolutionInterval == 0) ? "EVOLUTION" : "UPGRADE"
-        title.fontSize = 32
-        title.position = CGPoint(x: 0, y: 150)
+        title.fontSize = 32 * deviceScale
+        title.position = CGPoint(x: 0, y: 150 * deviceScale)
         title.fontColor = .yellow
         overlay.addChild(title)
         
         let options = generateUpgradeOptions()
         currentUpgradeOptions = options
         
-        let startY: CGFloat = 50
-        let gap: CGFloat = 140
+        let startY: CGFloat = 50 * deviceScale
+        let gap: CGFloat = 140 * deviceScale
         
         for (i, option) in options.enumerated() {
-            let card = SKShapeNode(rectOf: CGSize(width: size.width - 80, height: 120), cornerRadius: 15)
+            let card = SKShapeNode(rectOf: CGSize(width: size.width - 80 * deviceScale, height: 120 * deviceScale), cornerRadius: 15 * deviceScale)
             card.fillColor = UIColor.white.withAlphaComponent(0.1)
             card.strokeColor = .white
-            card.lineWidth = 2
+            card.lineWidth = 2 * deviceScale
             card.position = CGPoint(x: 0, y: startY - CGFloat(i) * gap)
             card.name = "upgrade_option_\(i)"
             
             let optTitle = SKLabelNode(fontNamed: "Arial-BoldMT")
             optTitle.text = option.title
-            optTitle.fontSize = 24
-            optTitle.position = CGPoint(x: 0, y: 15)
+            optTitle.fontSize = 24 * deviceScale
+            optTitle.position = CGPoint(x: 0, y: 15 * deviceScale)
             card.addChild(optTitle)
             
             let optDesc = SKLabelNode(fontNamed: "Arial")
             optDesc.text = option.description
-            optDesc.fontSize = 16
-            optDesc.position = CGPoint(x: 0, y: -20)
+            optDesc.fontSize = 16 * deviceScale
+            optDesc.position = CGPoint(x: 0, y: -20 * deviceScale)
             card.addChild(optDesc)
             
             overlay.addChild(card)
@@ -723,6 +724,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // --- Game Lifecycle ---
     
     override func didMove(to view: SKView) {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            deviceScale = 1.6
+        }
         backgroundColor = .black
         physicsWorld.gravity = .zero
         physicsWorld.contactDelegate = self
@@ -747,9 +751,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     func setupDebugButton() {
         let debugBtn = SKLabelNode(fontNamed: "Arial-BoldMT")
         debugBtn.text = "[ TEST EVO ]"
-        debugBtn.fontSize = 20
+        debugBtn.fontSize = 20 * deviceScale
         debugBtn.fontColor = .red
-        debugBtn.position = CGPoint(x: size.width - 80, y: size.height - 100)
+        debugBtn.position = CGPoint(x: size.width - 80 * deviceScale, y: size.height - 100 * deviceScale)
         debugBtn.zPosition = 1000
         debugBtn.name = "debugButton"
         addChild(debugBtn)
@@ -758,10 +762,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     func setupTestButton() {
         let btn = SKLabelNode(fontNamed: "Arial-BoldMT")
         btn.text = "[ TEST DROP ]"
-        btn.fontSize = 20
+        btn.fontSize = 20 * deviceScale
         btn.fontColor = .cyan
         // Position top-right (below where debug button usually is)
-        btn.position = CGPoint(x: size.width - 80, y: size.height - 140)
+        btn.position = CGPoint(x: size.width - 80 * deviceScale, y: size.height - 140 * deviceScale)
         btn.zPosition = 1000
         btn.name = "testDropButton"
         addChild(btn)
@@ -838,7 +842,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
             if node.name == "testDropButton" {
                 // Spawn at a random X at the top of the screen
-                let randomX = CGFloat.random(in: 30...(size.width - 30))
+                let randomX = CGFloat.random(in: 30...(size.width - 30 * deviceScale))
                 spawnRandomPowerUp(at: CGPoint(x: randomX, y: size.height))
                 return
             }
@@ -948,9 +952,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let bulletAnimation = SKAction.animate(with: bulletTextures, timePerFrame: 0.1)
         
         func createBullet(offsetX: CGFloat, angle: CGFloat) {
-            var bulletSize = CGSize(width: 20, height: 40)
+            var bulletSize = CGSize(width: 20 * deviceScale, height: 40 * deviceScale)
             if hasBigShot {
-                bulletSize = CGSize(width: 40, height: 80)
+                bulletSize = CGSize(width: 40 * deviceScale, height: 80 * deviceScale)
             }
             let bullet = Bullet(texture: bulletTextures[0], size: bulletSize)
             bullet.owner = .player
@@ -1144,13 +1148,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     private func setupHearts() {
-        let spacing: CGFloat = 60
+        let spacing: CGFloat = 60 * deviceScale
         let totalWidth = CGFloat(maxHearts - 1) * spacing
         let startX = size.width / 2 - totalWidth / 2
         for i in 0..<maxHearts {
             let heart = SKSpriteNode(imageNamed: "heart_full")
-            heart.setScale(0.05)
-            heart.position = CGPoint(x: startX + CGFloat(i) * spacing, y: 30)
+            heart.setScale(0.05 * deviceScale)
+            heart.position = CGPoint(x: startX + CGFloat(i) * spacing, y: 30 * deviceScale)
             heart.zPosition = 100
             addChild(heart)
             heartNodes.append(heart)
@@ -1169,9 +1173,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
     func setupScoreLabel () -> SKLabelNode {
         let label = SKLabelNode(fontNamed: "PressStart2P")
-        label.fontSize = 24
+        label.fontSize = 24 * deviceScale
         label.zPosition = 100
-        label.position = CGPoint(x: size.width / 2, y: size.height - 100)
+        label.position = CGPoint(x: size.width / 2, y: size.height - 100 * deviceScale)
         label.text = "Score: \(score)"
         addChild(label)
         return label
@@ -1185,22 +1189,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         let go = SKLabelNode(fontNamed: "PressStart2P")
         go.text = "GAME OVER"
-        go.fontSize = 40
+        go.fontSize = 40 * deviceScale
         go.fontColor = .red
-        go.position = CGPoint(x: size.width/2, y: size.height/2 + 100)
+        go.position = CGPoint(x: size.width/2, y: size.height/2 + 100 * deviceScale)
         go.zPosition = 1000
         addChild(go)
         
         let fs = SKLabelNode(fontNamed: "PressStart2P")
         fs.text = "Final: \(score)"
-        fs.fontSize = 24
-        fs.position = CGPoint(x: size.width/2, y: size.height/2 + 60)
+        fs.fontSize = 24 * deviceScale
+        fs.position = CGPoint(x: size.width/2, y: size.height/2 + 60 * deviceScale)
         fs.zPosition = 1000
         addChild(fs)
         
         let rb = SKLabelNode(fontNamed: "PressStart2P")
         rb.text = "RESTART"
-        rb.fontSize = 30
+        rb.fontSize = 30 * deviceScale
         rb.fontColor = .yellow
         rb.position = CGPoint(x: size.width/2, y: size.height/2)
         rb.zPosition = 1000
@@ -1209,14 +1213,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Local Highscore
         let localLabel = SKLabelNode(text: "Local Highscore: \(localHighScore)")
-        localLabel.fontSize = 32
-        localLabel.position = CGPoint(x: size.width/2, y: size.height/2 - 90)
+        localLabel.fontSize = 32 * deviceScale
+        localLabel.position = CGPoint(x: size.width/2, y: size.height/2 - 90 * deviceScale)
         addChild(localLabel)
         
         // Global Highscore
         showGlobalScore()
-        globalLabel.fontSize = 28
-        globalLabel.position = CGPoint(x: size.width/2, y: size.height/2 - 120)
+        globalLabel.fontSize = 28 * deviceScale
+        globalLabel.position = CGPoint(x: size.width/2, y: size.height/2 - 120 * deviceScale)
         addChild(globalLabel)
         
         scoreLabel.isHidden = true
