@@ -54,9 +54,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     var totalWaveLabel: SKLabelNode!
     
     // --- States ---
+    var isStarted = false
     var isGameOver = false
     var isInvincible = false
     var isBerserk = false
+    var isPausedByUser = false
     
     // --- Visuals ---
     var hasShield = false
@@ -104,6 +106,78 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         player.physicsBody?.categoryBitMask = PhysicsCategory.player
         player.physicsBody?.contactTestBitMask = PhysicsCategory.enemyBullet | PhysicsCategory.powerUp
         player.physicsBody?.collisionBitMask = PhysicsCategory.none
+    }
+
+    func showTitleScreen() {
+        isStarted = false
+    
+        let overlay = SKShapeNode(rectOf: CGSize(width: size.width, height: size.height))
+        overlay.fillColor = .black
+        overlay.alpha = 0.85
+        overlay.zPosition = 2000
+        overlay.name = "titleOverlay"
+        overlay.position = CGPoint(x: size.width/2, y: size.height/2)
+        addChild(overlay)
+    
+        let title = SKLabelNode(fontNamed: "PressStart2P")
+        title.text = "SPACE BOUNCE"
+        title.fontSize = 44
+        title.position = CGPoint(x: 0, y: 100)
+        title.fontColor = .white
+        overlay.addChild(title)
+    
+        let start = SKLabelNode(fontNamed: "PressStart2P")
+        start.text = "START"
+        start.fontSize = 28
+        start.fontColor = .green
+        start.position = CGPoint(x: 0, y: 0)
+        start.name = "startButton"
+        overlay.addChild(start)
+    
+        let help = SKLabelNode(fontNamed: "Arial")
+        help.text = "Tap to shoot. Survive waves."
+        help.position = CGPoint(x: 0, y: -60)
+        help.fontSize = 14
+        help.fontColor = .lightGray
+        overlay.addChild(help)
+    }
+    
+    func startGameFromTitle() {
+        if let overlay = childNode(withName: "titleOverlay") {
+            overlay.removeFromParent()
+        }
+        isStarted = true
+        showTutorialTooltips()
+        // start first wave or show HUD etc.
+        level = 0
+        startNextWave()
+    }
+
+    func setGamePaused(paused: Bool, overlay: Bool) {
+        isPausedByUser = paused
+        if paused {
+            // pause
+            physicsWorld.speed = 0
+            self.speed = 0
+            // freeze animations on children (safer)
+            for node in children {
+                node.speed = 0
+            }
+            // show overlay
+            if overlay {
+                showPauseOverlay()
+            }
+        } else {
+            // resume
+            physicsWorld.speed = 1
+            self.speed = 1
+            for node in children {
+                node.speed = 1
+            }
+            if overlay {
+                hidePauseOverlay()
+            }
+        }
     }
     
     private func setupHUD() {
@@ -169,6 +243,50 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             waveCountdownLabel.fontColor = .cyan
         }
     }
+
+    func setupPauseButton() {
+        let p = SKLabelNode(fontNamed: "Arial-BoldMT")
+        p.text = "II"
+        p.fontSize = 20
+        p.fontColor = .white
+        p.position = CGPoint(x: 30, y: size.height - 40)
+        p.name = "pauseButton"
+        p.zPosition = 1000
+        addChild(p)
+    }
+    
+    func showPauseOverlay() {
+        if childNode(withName: "pauseOverlay") != nil { return }
+        let overlay = SKShapeNode(rectOf: CGSize(width: size.width, height: size.height))
+        overlay.fillColor = .black
+        overlay.alpha = 0.8
+        overlay.zPosition = 3000
+        overlay.name = "pauseOverlay"
+        overlay.position = CGPoint(x: size.width/2, y: size.height/2)
+        addChild(overlay)
+    
+        let resume = SKLabelNode(fontNamed: "PressStart2P")
+        resume.text = "RESUME"
+        resume.fontSize = 30
+        resume.fontColor = .green
+        resume.position = CGPoint(x: 0, y: 40)
+        resume.name = "resumeButton"
+        overlay.addChild(resume)
+    
+        let restart = SKLabelNode(fontNamed: "PressStart2P")
+        restart.text = "RESTART"
+        restart.fontSize = 30
+        restart.fontColor = .yellow
+        restart.position = CGPoint(x: 0, y: -40)
+        restart.name = "restartButton"
+        overlay.addChild(restart)
+        showTutorialTooltips()
+    }
+    
+    func hidePauseOverlay() {
+        childNode(withName: "pauseOverlay")?.removeFromParent()
+    }
+
     
     // --- Wave & Enemy Logic ---
     
@@ -340,8 +458,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if isGameOver { return }
         
         isPausedForUpgrade = true
-        physicsWorld.speed = 0
-        self.speed = 0 // Freeze animations
+        setGamePaused(paused: true, overlay: false)
         
         let overlay = SKShapeNode(rectOf: size)
         overlay.fillColor = .black
@@ -401,13 +518,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         // Use GCD to unfreeze since self.speed is 0
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self = self else { return }
-            self.isPausedForUpgrade = false
-            self.physicsWorld.speed = 1.0
-            self.speed = 1.0
-            self.triggerWaveSpawn()
-        }
+        isPausedForUpgrade = false
+        setGamePaused(paused: false, overlay: false)
+        triggerWaveSpawn()
     }
     
     // --- Visuals Logic ---
@@ -506,10 +619,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupHearts()
         scoreLabel = setupScoreLabel()
         setupHUD()
+        setupPauseButton()
         setupDebugButton()
         setupTestButton()
         
-        spawnEnemy(wave: "11")
+        showTitleScreen()
     }
     
     func setupDebugButton() {
@@ -610,6 +724,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 spawnRandomPowerUp(at: CGPoint(x: randomX, y: size.height))
                 return
             }
+            if node.name == "startButton" {
+                startGameFromTitle()
+                return
+            }
+            if node.name == "pauseButton" {
+                // toggle
+                setGamePaused(paused: true, overlay: true)
+                return
+            }
+        }
+
+        if isPausedByUser {
+            for node in nodes {
+                if node.name == "resumeButton" {
+                    setGamePaused(paused: false, overlay: true)
+                    return
+                }
+                if node.name == "restartButton" {
+                    // if pause overlay's restart
+                    restartGame()
+                    return
+                }
+            }
+            return
         }
         
         if isPausedForUpgrade {
@@ -637,13 +775,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
     
     override func update(_ currentTime: TimeInterval) {
-        if isGameOver || isPausedForUpgrade { return }
-        
         let dt : TimeInterval
         if lastUpdateTime == 0 { dt = 0 }
         else { dt = currentTime - lastUpdateTime }
         lastUpdateTime = currentTime
-        
+        if isGameOver || isPausedForUpgrade || !isStarted || isPausedByUser { return }
+
         for node in children {
             if let enemy = node as? Enemy {
                 enemy.updateAI(deltaTime: dt, scene: self)
@@ -916,7 +1053,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let label = SKLabelNode(fontNamed: "PressStart2P")
         label.fontSize = 24
         label.zPosition = 100
-        label.position = CGPoint(x: size.width / 2, y: size.height - 60)
+        label.position = CGPoint(x: size.width / 2, y: size.height - 100)
         label.text = "Score: \(score)"
         addChild(label)
         return label
@@ -962,6 +1099,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         isInvincible = false
         isBerserk = false
         hasShield = false
+        isPausedByUser = false
         
         score = 0
         level = 0
@@ -982,8 +1120,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         pendingEnemies = 0
         isSpawning = false
         
-        self.speed = 1.0
-        physicsWorld.speed = 1.0
+        setGamePaused(paused: false, overlay: true)
         
         setupPlayer()
         setupHearts()
