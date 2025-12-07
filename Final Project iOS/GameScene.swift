@@ -75,6 +75,27 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         var action: () -> Void
     }
     
+    struct HighscoreStorage {
+        static let localKey = "localHighscore"
+        static let globalKey = "cachedGlobalHighscore"
+
+        static var localHighscore: Int {
+            get { UserDefaults.standard.integer(forKey: localKey) }
+            set { UserDefaults.standard.set(newValue, forKey: localKey) }
+        }
+
+        static var cachedGlobalHighscore: Int {
+            get { UserDefaults.standard.integer(forKey: globalKey) }
+            set { UserDefaults.standard.set(newValue, forKey: globalKey) }
+        }
+    }
+    
+    var globalLabel: SKLabelNode! = nil
+
+    var localHighScore: Int = 0
+    var globalHighScore: Int? = nil
+    let globalHighScoreURL = URL(string: "https://6935d33dfa8e704dafbefcc9.mockapi.io/api/highscore/highscore")!
+    
     struct PhysicsCategory {
         static let none: UInt32   = 0
         static let player: UInt32 = 0x1 << 0
@@ -88,6 +109,90 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let length = sqrt(p.x * p.x + p.y * p.y)
         if length == 0 { return CGPoint(x: 0, y: 1) }
         return CGPoint(x: p.x / length, y: p.y / length)
+    }
+    
+    func loadLocalHighScore() {
+        localHighScore = UserDefaults.standard.integer(forKey: "localHighScore")
+    }
+
+    func saveLocalHighScore(_ score: Int) {
+        if score > localHighScore {
+            localHighScore = score
+            UserDefaults.standard.set(score, forKey: "localHighScore")
+        }
+    }
+    
+    struct GlobalScoreResponse: Codable {
+        let score: Int
+        let id: String
+    }
+
+    func fetchGlobalHighScore() {
+        let request = URLRequest(url: globalHighScoreURL)
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            
+            if let error = error {
+                print("❌ API error: \(error.localizedDescription)")
+                self.loadOfflineGlobalScore()
+                return
+            }
+            
+            guard let data = data else {
+                print("❌ No data received")
+                self.loadOfflineGlobalScore()
+                return
+            }
+            
+            do {
+                let result = try JSONDecoder().decode([GlobalScoreResponse].self, from: data)
+                if let first = result.first {
+                    self.globalHighScore = first.score
+                    self.showGlobalScore()
+                    print("🌐 Global score loaded: \(first.score)")
+                    
+                    // Save fallback cache
+                    UserDefaults.standard.set(first.score, forKey: "cachedGlobalHighScore")
+                } else {
+                    self.loadOfflineGlobalScore()
+                }
+            } catch {
+                print("❌ JSON decode error: \(error.localizedDescription)")
+                self.loadOfflineGlobalScore()
+            }
+        }
+        .resume()
+    }
+
+    func loadOfflineGlobalScore() {
+        DispatchQueue.main.async {
+            if UserDefaults.standard.object(forKey: "cachedGlobalHighScore") != nil {
+                self.globalHighScore = UserDefaults.standard.integer(forKey: "cachedGlobalHighScore")
+                self.showGlobalScore()
+                print("📴 Offline global score loaded")
+            } else {
+                self.globalHighScore = nil // means offline & no cache
+                self.showGlobalScore()
+                print("📴 Offline, no cached global score")
+            }
+        }
+    }
+    
+    func showGlobalScore() {
+        let globalText: String
+        if let g = globalHighScore {
+            globalText = "Global Highscore: \(g)"
+        } else {
+            globalText = "Global Highscore: OFFLINE"
+        }
+
+        if globalLabel == nil {
+            globalLabel = SKLabelNode(text: globalText)
+            print(globalText)
+        } else {
+            globalLabel.text = globalText
+            print(globalText)
+        }
     }
     
     private func setupPlayer() {
@@ -140,8 +245,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         help.fontSize = 14
         help.fontColor = .lightGray
         overlay.addChild(help)
+        
+        // Local Highscore
+        let localLabel = SKLabelNode(text: "Local Highscore: \(localHighScore)")
+        localLabel.fontSize = 32
+        localLabel.position = CGPoint(x: 0, y: -90)
+        overlay.addChild(localLabel)
+        
+        // Global Highscore
+        showGlobalScore()
+        globalLabel.fontSize = 28
+        globalLabel.position = CGPoint(x: 0, y: -120)
+        overlay.addChild(globalLabel)
     }
-    
+
     func startGameFromTitle() {
         if let overlay = childNode(withName: "titleOverlay") {
             overlay.removeFromParent()
@@ -431,10 +548,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             self?.playerDamage += dmgBoost
         })
         
-        if self.baseFireRate > 0.1 {
+        if self.baseFireRate > 0.3 {
             options.append(UpgradeOption(title: "Rapid Fire", description: "Fire Interval -0.1s") { [weak self] in
                 guard let self = self else { return }
-                self.baseFireRate = max(0.1, self.baseFireRate - 0.05)
+                self.baseFireRate = max(0.3, self.baseFireRate - 0.1)
                 if !self.isBerserk { self.playerFireRate = self.baseFireRate }
             })
         }
@@ -622,7 +739,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupPauseButton()
         setupDebugButton()
         setupTestButton()
-        
+        loadLocalHighScore()
+        fetchGlobalHighScore()
         showTitleScreen()
     }
     
@@ -734,21 +852,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 return
             }
         }
-
-        if isPausedByUser {
-            for node in nodes {
-                if node.name == "resumeButton" {
-                    setGamePaused(paused: false, overlay: true)
-                    return
-                }
-                if node.name == "restartButton" {
-                    // if pause overlay's restart
-                    restartGame()
-                    return
-                }
-            }
-            return
-        }
         
         if isPausedForUpgrade {
             for node in nodes {
@@ -763,6 +866,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             return
         }
         
+        if isPausedByUser {
+            for node in nodes {
+                if node.name == "resumeButton" {
+                    setGamePaused(paused: false, overlay: true)
+                    return
+                }
+                if node.name == "restartButton" {
+                    // if pause overlay's restart
+                    restartGame()
+                    return
+                }
+            }
+            return
+        }
+
         if isGameOver {
             for node in nodes {
                 if node.name == "restartButton" { restartGame() }
@@ -1062,20 +1180,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     func triggerGameOver() {
         isGameOver = true
         player.removeFromParent()
+        saveLocalHighScore(score)
         if let bgm = childNode(withName: "backgroundMusic") { bgm.removeFromParent() }
         
         let go = SKLabelNode(fontNamed: "PressStart2P")
         go.text = "GAME OVER"
         go.fontSize = 40
         go.fontColor = .red
-        go.position = CGPoint(x: size.width/2, y: size.height/2 + 40)
+        go.position = CGPoint(x: size.width/2, y: size.height/2 + 100)
         go.zPosition = 1000
         addChild(go)
         
         let fs = SKLabelNode(fontNamed: "PressStart2P")
         fs.text = "Final: \(score)"
         fs.fontSize = 24
-        fs.position = CGPoint(x: size.width/2, y: size.height/2)
+        fs.position = CGPoint(x: size.width/2, y: size.height/2 + 60)
         fs.zPosition = 1000
         addChild(fs)
         
@@ -1083,10 +1202,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         rb.text = "RESTART"
         rb.fontSize = 30
         rb.fontColor = .yellow
-        rb.position = CGPoint(x: size.width/2, y: size.height/2 - 100)
+        rb.position = CGPoint(x: size.width/2, y: size.height/2)
         rb.zPosition = 1000
         rb.name = "restartButton"
         addChild(rb)
+        
+        // Local Highscore
+        let localLabel = SKLabelNode(text: "Local Highscore: \(localHighScore)")
+        localLabel.fontSize = 32
+        localLabel.position = CGPoint(x: size.width/2, y: size.height/2 - 90)
+        addChild(localLabel)
+        
+        // Global Highscore
+        showGlobalScore()
+        globalLabel.fontSize = 28
+        globalLabel.position = CGPoint(x: size.width/2, y: size.height/2 - 120)
+        addChild(globalLabel)
         
         scoreLabel.isHidden = true
     }
@@ -1128,6 +1259,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupHUD()
         setupDebugButton()
         setupTestButton()
+        setupPauseButton()
         
         let bgm = SKAudioNode(fileNamed: "song.mp3")
         bgm.autoplayLooped = true
