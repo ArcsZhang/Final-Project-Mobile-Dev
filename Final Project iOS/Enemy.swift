@@ -188,6 +188,7 @@ class Enemy: SKSpriteNode {
             b.physicsBody?.isDynamic = true
             
             if isBounce {
+                b.color = .purple
                 b.bounceCount = 2
                 b.bounceFloor = false
             } else {

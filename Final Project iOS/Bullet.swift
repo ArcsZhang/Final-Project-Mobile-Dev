@@ -58,18 +58,18 @@ class Bullet: SKSpriteNode {
             if position.x < 0 {
                 position.x = -position.x
                 direction.x *= -1
-                zRotation = atan2(direction.y, direction.x)
+                zRotation = atan2(direction.y, direction.x) - .pi/2
             }
             if position.x > scene.size.width {
                 position.x = scene.size.width - (position.x - scene.size.width)
                 direction.x *= -1
-                zRotation = atan2(direction.y, direction.x)
+                zRotation = atan2(direction.y, direction.x) - .pi/2
             }
             if position.y < 0 {
                 if bounceFloor {
                     position.y = -position.y
                     direction.y *= -1
-                    zRotation = atan2(direction.y, direction.x)
+                    zRotation = atan2(direction.y, direction.x) - .pi/2
                     bounceCount -= 1
                     if bounceCount == 0 { removeFromParent() }
                 } else { removeFromParent() }
@@ -78,7 +78,7 @@ class Bullet: SKSpriteNode {
                 if bounceCelling {
                     position.y = scene.size.height - (position.y - scene.size.height)
                     direction.y *= -1
-                    zRotation = atan2(direction.y, direction.x)
+                    zRotation = atan2(direction.y, direction.x) - .pi/2
                     bounceCount -= 1
                     if bounceCount == 0 { removeFromParent() }
                 } else { removeFromParent() }

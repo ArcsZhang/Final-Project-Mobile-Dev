@@ -23,8 +23,10 @@ class PowerUp: SKSpriteNode {
         // Set color based on type for visual distinction
         let color: UIColor
         switch type {
-        case .shield, .heal:
-            color = .cyan // Keep original blue/cyan
+        case .shield:
+            color = .cyan
+        case .heal:
+            color = .green
         case .berserk:
             color = .magenta // New: Berserk uses magenta for visibility
         }

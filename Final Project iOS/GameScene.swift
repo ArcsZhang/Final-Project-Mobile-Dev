@@ -27,6 +27,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     var hasRicochet = false
     var hasPlasmaField = false
     var hasLuckBoost = false
+    var hasBigShot = false
     
     // --- Game Logic ---
     var lastShotTime : CGFloat = 0
@@ -147,7 +148,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(rightTip)
         
         let fadeSeq = SKAction.sequence([
-            SKAction.wait(forDuration: 5.0),
+            SKAction.wait(forDuration: 10.0),
             SKAction.fadeOut(withDuration: 1.0),
             SKAction.removeFromParent()
         ])
@@ -282,7 +283,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     self?.hasPlasmaField = true
                 })
             }
-            
+            if !hasBigShot {
+                weaponPool.append(UpgradeOption(title: "BIG SHOT", description: "Bullet are bigger!") { [weak self] in
+                    self?.hasBigShot = true
+                })
+            }
             if !hasLuckBoost {
                 weaponPool.append(UpgradeOption(title: "SUPPLY DROP", description: "PowerUp Chance +10%") { [weak self] in
                     self?.hasLuckBoost = true
@@ -290,16 +295,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 })
             }
             
+            let dmgBoost = 50 + (level * 5)
+            weaponPool.append(UpgradeOption(title: "OVERCHARGE", description: "Damage +\(dmgBoost)") { [weak self] in
+                self?.playerDamage += dmgBoost
+            })
+            
             weaponPool.shuffle()
             let countToPick = min(3, weaponPool.count)
             options.append(contentsOf: weaponPool.prefix(countToPick))
-            
-            while options.count < 3 {
-                let dmgBoost = 50 + (level * 5)
-                options.append(UpgradeOption(title: "OVERCHARGE", description: "Damage +\(dmgBoost)") { [weak self] in
-                    self?.playerDamage += dmgBoost
-                })
-            }
             return options
         }
         
@@ -310,11 +313,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             self?.playerDamage += dmgBoost
         })
         
-        options.append(UpgradeOption(title: "Rapid Fire", description: "Fire Rate +5%") { [weak self] in
-            guard let self = self else { return }
-            self.baseFireRate = max(0.1, self.baseFireRate - 0.02)
-            if !self.isBerserk { self.playerFireRate = self.baseFireRate }
-        })
+        if self.baseFireRate > 0.1 {
+            options.append(UpgradeOption(title: "Rapid Fire", description: "Fire Interval -0.1s") { [weak self] in
+                guard let self = self else { return }
+                self.baseFireRate = max(0.1, self.baseFireRate - 0.05)
+                if !self.isBerserk { self.playerFireRate = self.baseFireRate }
+            })
+        }
         
         if currentHearts < maxHearts {
             options.append(UpgradeOption(title: "Repair", description: "Recover 1 Heart") { [weak self] in
@@ -688,7 +693,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let bulletAnimation = SKAction.animate(with: bulletTextures, timePerFrame: 0.1)
         
         func createBullet(offsetX: CGFloat, angle: CGFloat) {
-            let bullet = Bullet(texture: bulletTextures[0], size: CGSize(width: 20, height: 40))
+            var bulletSize = CGSize(width: 20, height: 40)
+            if hasBigShot {
+                bulletSize = CGSize(width: 40, height: 80)
+            }
+            let bullet = Bullet(texture: bulletTextures[0], size: bulletSize)
             bullet.owner = .player
             bullet.damage = self.playerDamage
             bullet.position = CGPoint(x: player.position.x + offsetX, y: player.position.y + 40)
@@ -775,6 +784,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             damagePlayer(by: 1)
             nodeA.removeFromParent()
         }
+        
+        // 5. Enemy vs Player
+        if maskA == PhysicsCategory.player && maskB == PhysicsCategory.enemy {
+            damagePlayer(by: 1)
+            nodeB.removeFromParent()
+        } else if maskA == PhysicsCategory.enemy && maskB == PhysicsCategory.player {
+            damagePlayer(by: 1)
+            nodeA.removeFromParent()
+        }
     }
     
     func collectPowerUp(playerNode: SKNode, powerUpNode: SKNode) {
@@ -794,6 +812,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         case .heal:
             if currentHearts < maxHearts { damagePlayer(by: -1) }
+            else {
+                score += 500
+                scoreLabel.text = "Score: \(score)"
+            }
         case .berserk:
             activateBerserkMode()
         }
@@ -955,6 +977,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         hasRicochet = false
         hasPlasmaField = false
         hasLuckBoost = false
+        hasBigShot = false
         
         pendingEnemies = 0
         isSpawning = false
