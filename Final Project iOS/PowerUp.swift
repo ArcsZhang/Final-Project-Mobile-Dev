@@ -17,7 +17,7 @@ class PowerUp: SKSpriteNode {
     
     var type: PowerType
     
-    init(type: PowerType, position: CGPoint) {
+    init(type: PowerType, position: CGPoint, deviceScale: CGFloat) {
         self.type = type
         
         // Set color based on type for visual distinction
@@ -32,13 +32,13 @@ class PowerUp: SKSpriteNode {
         }
         
         // Large hitbox for easy collection
-        super.init(texture: nil, color: color, size: CGSize(width: 30, height: 30))
+        super.init(texture: nil, color: color, size: CGSize(width: 30 * deviceScale, height: 30 * deviceScale))
         
         self.position = position
         self.name = "powerup"
         self.zPosition = 8
         
-        self.physicsBody = SKPhysicsBody(circleOfRadius: 30)
+        self.physicsBody = SKPhysicsBody(circleOfRadius: 45 * deviceScale)
         self.physicsBody?.categoryBitMask = GameScene.PhysicsCategory.powerUp
         self.physicsBody?.contactTestBitMask = GameScene.PhysicsCategory.player
         self.physicsBody?.collisionBitMask = GameScene.PhysicsCategory.none
@@ -46,7 +46,7 @@ class PowerUp: SKSpriteNode {
         self.physicsBody?.affectedByGravity = false
         
         // Increase falling speed slightly for urgency
-        let moveAction = SKAction.moveBy(x: 0, y: -1200, duration: 10)
+        let moveAction = SKAction.moveBy(x: 0, y: -1200 * deviceScale, duration: 10)
         let removeAction = SKAction.removeFromParent()
         self.run(SKAction.sequence([moveAction, removeAction]))
     }

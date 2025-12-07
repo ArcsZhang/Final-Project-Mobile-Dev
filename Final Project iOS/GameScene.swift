@@ -242,21 +242,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     
         let help = SKLabelNode(fontNamed: "Arial")
         help.text = "Tap to shoot. Survive waves."
-        help.position = CGPoint(x: 0, y: -60 * deviceScale)
+        help.position = CGPoint(x: 0, y: -40 * deviceScale)
         help.fontSize = 14 * deviceScale
         help.fontColor = .lightGray
         overlay.addChild(help)
         
         // Local Highscore
-        let localLabel = SKLabelNode(text: "Local Highscore: \(localHighScore)")
+        let localLabel = SKLabelNode(fontNamed: "PressStart2P")
+        localLabel.text = "Local Highscore: \(localHighScore)"
         localLabel.fontSize = 32 * deviceScale
         localLabel.position = CGPoint(x: 0, y: -90 * deviceScale)
         overlay.addChild(localLabel)
         
         // Global Highscore
         showGlobalScore()
-        globalLabel.fontSize = 28 * deviceScale
-        globalLabel.position = CGPoint(x: 0, y: -120 * deviceScale)
+        globalLabel.fontSize = 32 * deviceScale
+        globalLabel.fontName = "PressStart2P"
+        globalLabel.position = CGPoint(x: 0, y: -130 * deviceScale)
         overlay.addChild(globalLabel)
     }
 
@@ -364,10 +366,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     func setupPauseButton() {
         let p = SKLabelNode(fontNamed: "Arial-BoldMT")
-        p.text = "II"
-        p.fontSize = 20 * deviceScale
+        p.text = "I I"
+        p.fontSize = 30 * deviceScale
         p.fontColor = .white
-        p.position = CGPoint(x: 30, y: size.height - 40 * deviceScale)
+        p.position = CGPoint(x: 30, y: size.height - 60 * deviceScale)
         p.name = "pauseButton"
         p.zPosition = 1000
         addChild(p)
@@ -443,9 +445,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 
                 let texture = SKTexture(imageNamed: imageName)
                 texture.filteringMode = .nearest
-                let visualSize = CGSize(width: 64 * deviceScale, height: 64 * deviceScale)
+                let visualSize = CGSize(width: 96 * deviceScale, height: 96 * deviceScale)
                 let enemy = Enemy(texture: texture, color: .clear, size: visualSize)
-                
+                enemy.deviceScale = deviceScale
+
                 enemy.health = health
                 
                 // ✅ Add this line: Initialize Health Bar!
@@ -455,7 +458,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 enemy.bulletType = type
                 enemy.name = "enemy"
                 enemy.zPosition = 5
-                
+
                 enemy.shootPattern = .blind
                 
                 let moveRoll = Int.random(in: 0...100)
@@ -473,7 +476,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     enemy.hSpeed = CGFloat.random(in: 20...40)
                 }
                 
-                let physicsSize = CGSize(width: 48 * deviceScale, height: 48 * deviceScale)
+                let physicsSize = CGSize(width: 64 * deviceScale, height: 64 * deviceScale)
                 enemy.physicsBody = SKPhysicsBody(rectangleOf: physicsSize)
                 enemy.physicsBody?.isDynamic = true
                 enemy.physicsBody?.categoryBitMask = PhysicsCategory.enemy
@@ -726,6 +729,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     override func didMove(to view: SKView) {
         if UIDevice.current.userInterfaceIdiom == .pad {
             deviceScale = 1.6
+            print("is IPAD")
         }
         backgroundColor = .black
         physicsWorld.gravity = .zero
@@ -741,8 +745,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         scoreLabel = setupScoreLabel()
         setupHUD()
         setupPauseButton()
-        setupDebugButton()
-        setupTestButton()
+        // setupDebugButton()
+        // setupTestButton()
         loadLocalHighScore()
         fetchGlobalHighScore()
         showTitleScreen()
@@ -786,7 +790,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         let selectedType = availableTypes.randomElement()!
-        let p = PowerUp(type: selectedType, position: position)
+        let p = PowerUp(type: selectedType, position: position, deviceScale: deviceScale)
         addChild(p)
     }
     
@@ -850,7 +854,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 startGameFromTitle()
                 return
             }
-            if node.name == "pauseButton" {
+            if node.name == "pauseButton" && !isPausedForUpgrade && !isPausedByUser && !isGameOver {
                 // toggle
                 setGamePaused(paused: true, overlay: true)
                 return
@@ -926,7 +930,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
         
-        let dx = playerMoveSpeed * CGFloat(dt) * movementDirection
+        let dx = playerMoveSpeed * CGFloat(dt) * movementDirection * deviceScale
         player.position.x += dx
         
         let halfW = player.size.width * 0.5
@@ -969,7 +973,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             bullet.direction = normalize(CGPoint(x: dirX, y: dirY))
             bullet.zRotation = angle
             
-            bullet.bulletSpeed = 500
+            bullet.bulletSpeed = 500 * deviceScale
             bullet.acceleration = 0
             
             if hasRicochet {
@@ -991,15 +995,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         
         if hasDoubleShot {
-            createBullet(offsetX: -10, angle: 0)
-            createBullet(offsetX: 10, angle: 0)
+            createBullet(offsetX: -10 * deviceScale, angle: 0)
+            createBullet(offsetX: 10 * deviceScale, angle: 0)
         } else {
             createBullet(offsetX: 0, angle: 0)
         }
         
         if hasScatterShot {
-            createBullet(offsetX: -20, angle: 0.3)
-            createBullet(offsetX: 20, angle: -0.3)
+            createBullet(offsetX: -20 * deviceScale, angle: 0.3)
+            createBullet(offsetX: 20 * deviceScale, angle: -0.3)
         }
     }
     
@@ -1213,13 +1217,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         
         // Local Highscore
         let localLabel = SKLabelNode(text: "Local Highscore: \(localHighScore)")
+        localLabel.fontName = "PressStart2P"
         localLabel.fontSize = 32 * deviceScale
         localLabel.position = CGPoint(x: size.width/2, y: size.height/2 - 90 * deviceScale)
         addChild(localLabel)
         
         // Global Highscore
         showGlobalScore()
-        globalLabel.fontSize = 28 * deviceScale
+        globalLabel.fontName = "PressStart2P"
+        globalLabel.fontSize = 32 * deviceScale
         globalLabel.position = CGPoint(x: size.width/2, y: size.height/2 - 120 * deviceScale)
         addChild(globalLabel)
         
@@ -1261,8 +1267,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupHearts()
         scoreLabel = setupScoreLabel()
         setupHUD()
-        setupDebugButton()
-        setupTestButton()
+        // setupDebugButton()
+        // setupTestButton()
         setupPauseButton()
         
         let bgm = SKAudioNode(fileNamed: "song.mp3")

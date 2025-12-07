@@ -49,6 +49,8 @@ class Enemy: SKSpriteNode {
     // --- Visuals ---
     var healthBar: SKSpriteNode? // The red bar
     
+    var deviceScale: CGFloat = 1.0
+    
     // --- Methods ---
     
     // Setup the health bar visual
@@ -57,10 +59,10 @@ class Enemy: SKSpriteNode {
         self.maxHealth = health
         
         // 1. Background Bar (Black)
-        let barSize = CGSize(width: 40, height: 5)
+        let barSize = CGSize(width: 40 * deviceScale, height: 5 * deviceScale)
         let bg = SKSpriteNode(color: .black, size: barSize)
         // Position: Above the enemy
-        bg.position = CGPoint(x: 0, y: self.size.height / 2 + 10)
+        bg.position = CGPoint(x: 0, y: self.size.height / 2)
         bg.zPosition = 50 // High Z to be visible
         addChild(bg)
         
@@ -68,7 +70,7 @@ class Enemy: SKSpriteNode {
         healthBar = SKSpriteNode(color: .red, size: barSize)
         // Anchor Point (0, 0.5) means it shrinks from right to left
         healthBar?.anchorPoint = CGPoint(x: 0, y: 0.5)
-        healthBar?.position = CGPoint(x: -barSize.width / 2, y: self.size.height / 2 + 10)
+        healthBar?.position = CGPoint(x: -barSize.width / 2, y: self.size.height / 2)
         healthBar?.zPosition = 51 // Above background
         addChild(healthBar!)
     }
@@ -104,10 +106,10 @@ class Enemy: SKSpriteNode {
         case .none:
             return
         case .zigzag:
-            let dx = hSpeed * deltaTime * hDirection
+            let dx = hSpeed * deltaTime * hDirection * deviceScale
             position.x += dx
-            position.y -= vSpeed * deltaTime
-            vSpeed += acceleration * deltaTime
+            position.y -= vSpeed * deltaTime * deviceScale
+            vSpeed += acceleration * deltaTime * deviceScale
             
             if position.x <= halfW {
                 position.x = halfW
@@ -117,18 +119,18 @@ class Enemy: SKSpriteNode {
                 hDirection = -1.0
             }
         case .dive:
-            position.y -= vSpeed * deltaTime
-            vSpeed += acceleration * deltaTime
+            position.y -= vSpeed * deltaTime * deviceScale
+            vSpeed += acceleration * deltaTime * deviceScale
         case .chase:
             if let player = scene.player {
                 if player.position.x > position.x {
-                    position.x += min(hSpeed * deltaTime, player.position.x - position.x)
+                    position.x += min(hSpeed * deltaTime * deviceScale, player.position.x - position.x)
                 } else if player.position.x < position.x{
-                    position.x -= min(hSpeed * deltaTime, position.x - player.position.x)
+                    position.x -= min(hSpeed * deltaTime * deviceScale, position.x - player.position.x)
                 }
             }
-            position.y -= vSpeed * deltaTime
-            vSpeed += acceleration * deltaTime
+            position.y -= vSpeed * deltaTime * deviceScale
+            vSpeed += acceleration * deltaTime * deviceScale
         default:
             return
         }
@@ -171,13 +173,13 @@ class Enemy: SKSpriteNode {
         charging = false
         
         func fireEnemyBullet(direction: CGPoint, speed: CGFloat, isBounce: Bool = false) {
-            let b = Bullet(color: .red, size: CGSize(width: 15, height: 15))
+            let b = Bullet(color: .red, size: CGSize(width: 15 * deviceScale, height: 15 * deviceScale))
             b.owner = .enemy
             b.position = self.position
             b.zPosition = 8
             
             b.direction = direction
-            b.bulletSpeed = speed
+            b.bulletSpeed = speed * deviceScale
             b.zRotation = atan2(direction.y, direction.x)
             
             b.physicsBody = SKPhysicsBody(rectangleOf: b.size)
@@ -216,7 +218,7 @@ class Enemy: SKSpriteNode {
     func startChargeUp () {
         guard chargeEffect == nil else { return }
         
-        let glow = SKShapeNode(circleOfRadius: max(size.width, size.height) * 0.6)
+        let glow = SKShapeNode(circleOfRadius: max(size.width, size.height) * 0.4)
         glow.strokeColor = .yellow
         glow.lineWidth = 4
         glow.alpha = 0.0
