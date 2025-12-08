@@ -739,6 +739,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bgm.autoplayLooped = true
         bgm.name = "backgroundMusic"
         addChild(bgm)
+        bgm.run(SKAction.changeVolume(to: 0.4, duration: 0.0))
         
         setupPlayer()
         setupHearts()
@@ -947,7 +948,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard !isPausedForShot else { return }
         isPausedForShot = true
         lastShotTime = CACurrentMediaTime()
-        run(SKAction.playSoundFileNamed("shoot.wav", waitForCompletion: false))
+        run(SKAction.playSoundFileNamed("shoot.mp3", waitForCompletion: false))
         
         var bulletTextures: [SKTexture] = []
         for i in 1...4 {
@@ -1098,8 +1099,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if hasShield {
             hasShield = false
             removeShieldVisual()
+            run(SKAction.playSoundFileNamed("shield_break.mp3", waitForCompletion: false))
             return
         }
+        
+        run(SKAction.playSoundFileNamed("player_hit.mp3", waitForCompletion: false))
         
         if isInvincible { return }
         
@@ -1136,6 +1140,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             enemy.applyDamage(bullet.damage)
             if enemy.health <= 0 { enemyDestroyed(enemy) }
         }
+        
+        run(SKAction.playSoundFileNamed("hit.mp3", waitForCompletion: false))
+        
         bullet.removeFromParent()
     }
     
@@ -1148,6 +1155,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if Int.random(in: 0...100) < dropChance {
             spawnRandomPowerUp(at: enemy.position)
         }
+        
+        run(SKAction.playSoundFileNamed("enemy_destroyed.mp3", waitForCompletion: false))
+        
         enemy.removeFromParent()
     }
     
@@ -1275,6 +1285,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bgm.autoplayLooped = true
         bgm.name = "backgroundMusic"
         addChild(bgm)
+        bgm.run(SKAction.changeVolume(to: 0.4, duration: 0.0))
         
         spawnEnemy(wave: "11")
     }
